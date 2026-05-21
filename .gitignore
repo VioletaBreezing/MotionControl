@@ -1,0 +1,58 @@
+# System files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Windows files
+$RECYCLE.BIN/
+*.lnk
+
+# Temporary files
+*.tmp
+*.temp
+*~
+
+# MATLAB backup and autosave files
+*.m~
+*.asv
+autosave/
+
+# MATLAB cache and preferences directories
+.matlab/
+.slcache/
+.simulink/
+preferences/
+prefdir/
+
+# MATLAB crash dumps and temporary files
+matlab_crash_dump.*
+javaclasspath.txt
+javalibrarypath.txt
+
+# Simulink temporary directories
+slprj/
+
+# MATLAB code generation output (optional - comment out if you want to track generated code)
+codegen/
+rtw/
+
+# Compiled MEX files
+*.mex*
+*.mexw32
+*.mexw64
+*.mexa64
+*.mexmaci64
+
+# MATLAB unit test results
+testResults.xml
+testResults.mat
+
+# License files
+license_*.lic
+license_*.dat
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo

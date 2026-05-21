@@ -1,0 +1,35 @@
+# MATLAB and Simulink files should be treated as binary to prevent corruption
+*.m binary
+*.mlx binary
+*.mat binary
+*.fig binary
+*.p binary
+*.mlapp binary
+*.mdl binary
+*.slx binary
+*.mdlp binary
+*.slxp binary
+*.sldd binary
+
+# MEX files are binary
+*.mex* binary
+*.mexw32 binary
+*.mexw64 binary
+*.mexa64 binary
+*.mexmaci64 binary
+
+# Other common binary files
+*.pdf binary
+*.doc binary
+*.docx binary
+*.xls binary
+*.xlsx binary
+*.jpg binary
+*.png binary
+
+# Text files - ensure proper line ending handling
+*.txt text eol=lf
+*.csv text eol=lf
+
+# MATLAB project files
+*.prj text eol=lf

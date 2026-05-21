@@ -10,10 +10,10 @@ clear; clc; close all;
 %% ========== 1. 真实位姿参数（6DoF，显式设零）==========
 theta_x = deg2rad(0);           % 绕X轴旋转（设为0）
 theta_y = deg2rad(0);           % 绕Y轴旋转（设为0）
-theta_z = deg2rad(0.02);  % 绕Z轴旋转（非零）
+theta_z = deg2rad(10);         % 绕Z轴旋转（非零）
 
-tx = 0.005;             % X平移
-ty = -0.002;           % Y平移
+tx = 0.001;             % X平移
+ty = 0;           % Y平移
 tz = 0;                % Z平移（设为0）
 
 t = [tx; ty; tz];
@@ -51,9 +51,9 @@ p1_B = [-d/2;   -Ly/2;  0];   % M1: Y负向面左侧（上边）
 p2_B = [ d/2;   -Ly/2;  0];   % M2: Y负向面右侧（上边）
 
 % 镜面法向（指向外）
-n0_B = [-1;  0.002; 0]; n0_B = n0_B / norm(n0_B);
-n1_B = [ 0.003; -1; 0]; n1_B = n1_B / norm(n1_B);
-n2_B = [ -0.004; -1; 0]; n2_B = n2_B / norm(n2_B);
+n0_B = [-1;  0; 0]; n0_B = n0_B / norm(n0_B);
+n1_B = [ 0; -1; 0]; n1_B = n1_B / norm(n1_B);
+n2_B = [ 0; -1; 0]; n2_B = n2_B / norm(n2_B);
 
 % 转换到世界系
 vertices_W = (R * vertices_B')' + repmat(t', 8, 1);
@@ -63,12 +63,12 @@ P2 = R * p2_B + t;  N2 = R * n2_B;
 
 %% ========== 4. 入射光线与检波面 ==========
 a0 = [-0.3;  0.0;  0.0];
-u0 = [ 1.0;  0.0;  0.0]; u0 = u0 / norm(u0);
+u0 = [ 1.0;  0.01;  -0.01]; u0 = u0 / norm(u0);
 
 a1 = [-d/2; -0.3; 0.0];
 a2 = [ d/2; -0.3; 0.0];
-u1 = [0.0;  1.0;  0.0]; u1 = u1 / norm(u1);
-u2 = [0.0;  1.0;  0.0]; u2 = u2 / norm(u2);
+u1 = [-0.01;  1.0;  0.02]; u1 = u1 / norm(u1);
+u2 = [0.04;  1.0;  0.03]; u2 = u2 / norm(u2);
 
 rays.a = {a0, a1, a2};
 rays.u = {u0, u1, u2};
@@ -232,7 +232,7 @@ fprintf('\n光程测量值:\n');
 for i=1:3
     fprintf('  h_%d = %.10f m\n', i-1, h(i));
 end
-close all;
+% close all;
 %% ========== 8. LM 优化：从 h_ 反演位姿 ==========
 fprintf('\n=== 开始 LM 优化 ===\n');
 
@@ -330,18 +330,28 @@ for k = 1:N
             n_i = n_B{i};
             
             h_pred(i) = cal_light_dis(R_est, t_est, a_i, u_i, p_i, n_i);
-            J(i,:) = calc_jacobian(R_est, t_est, a_i, u_i, p_i, n_i);  % 已修正顺序！
+            J(i,:) = calc_jacobian(R_est, t_est, a_i, u_i, p_i, n_i);
+            J(i,3) = 0;
+            J(i,4) = 0;
+            J(i,5) = 0;
         end
         
         % 残差
         r = h_pred - h_meas;   % 3×1
         cost = 0.5 * sum(r.^2);
         
-        % fprintf('Iter %2d: cost = %.3e\n', iter, cost);
+        if N == 1
+            fprintf('Iter %2d: cost = %.3e\n', iter, cost);
+        end
         
         % 收敛判断
         if abs(prev_cost - cost) < tol
-            % fprintf('Converged by cost change.\n');
+            if norm(r) > 1e-11
+                error(sprintf('LM failed: Residual(%.3e) norm cannot converge.', norm(r)));
+            end
+            if N == 1 
+                fprintf('Converged by cost change.\n');
+            end
             break;
         end
         prev_cost = cost;
@@ -401,10 +411,10 @@ R_opt = rodrigues(phi_opt);
 
 true_t = t;
 true_phi = R_to_phi(R_true);
-trans_error_mm = (t_opt - t) * 1000;        % 平移误差 → mm
+trans_error_m = (t_opt - t);                     % 平移误差 → m
 rot_error_rad  = phi_opt - true_phi;             % 旋转李代数误差 → 弧度
 
-% 转换为欧拉角（Z-Y-X，与你生成方式一致）
+% 转换为欧拉角（Z-Y-X）
 [theta_x_opt, theta_y_opt, theta_z_opt] = rot2euler(R_opt);
 
 fprintf('\n=== 优化结果 vs 真实值 ===\n');
@@ -413,8 +423,8 @@ fprintf('平移 (mm):     真实 [%.3f, %.3f, %.3f] -> 估计 [%.3f, %.3f, %.3f]
 fprintf('旋转 (deg):    真实 [%.3f, %.3f, %.3f] -> 估计 [%.3f, %.3f, %.3f]\n', ...
         rad2deg([theta_x, theta_y, theta_z]), ...
         rad2deg([theta_x_opt, theta_y_opt, theta_z_opt]));
-fprintf('平移李代数误差 (nm): %e, %e, %e\n', trans_error_mm * 1e6);
-fprintf('旋转李代数误差 (nrad): %e, %e, %e\n', rot_error_rad * 1e6);
+fprintf('平移误差 (nm): %.2e, %.2e, %.2e\n', trans_error_m * 1e9);
+fprintf('so(3)误差 (nrad): %.2e, %.2e, %.2e\n', rot_error_rad * 1e9);
 
 %% 函数定义
 
@@ -511,4 +521,7 @@ function phi = R_to_phi(R)
         n = [nx; ny; nz];
         phi = theta * n;
     end
+end
+
+function sovle_linear_equation_cholesky()
 end

@@ -391,7 +391,7 @@ for k = 1:N
     end
 end
 
-elapsed_time_us = toc * 1000000 / N;  % ←←← 结束计时，转为毫秒
+elapsed_time_us = toc * 1000000 / N;  % ←←← 结束计时，转为微秒平均耗时
 fprintf('%d 次优化平均耗时: %.3f us\n', N, elapsed_time_us);
 
 % --- 提取最终结果 ---

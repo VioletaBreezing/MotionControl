@@ -10,10 +10,10 @@ clear; clc; close all;
 %% ========== 1. 真实位姿参数（6DoF，显式设零）==========
 theta_x = deg2rad(0);           % 绕X轴旋转（设为0）
 theta_y = deg2rad(0);           % 绕Y轴旋转（设为0）
-theta_z = deg2rad(0.5);  % 绕Z轴旋转（非零）
+theta_z = deg2rad(0.02);  % 绕Z轴旋转（非零）
 
 tx = 0.005;             % X平移
-ty = 0;           % Y平移
+ty = -0.002;           % Y平移
 tz = 0;                % Z平移（设为0）
 
 t = [tx; ty; tz];
@@ -51,9 +51,9 @@ p1_B = [-d/2;   -Ly/2;  0];   % M1: Y负向面左侧（上边）
 p2_B = [ d/2;   -Ly/2;  0];   % M2: Y负向面右侧（上边）
 
 % 镜面法向（指向外）
-n0_B = [-1;  0; 0]; n0_B = n0_B / norm(n0_B);
-n1_B = [ 0; -1; 0]; n1_B = n1_B / norm(n1_B);
-n2_B = [ 0; -1; 0]; n2_B = n2_B / norm(n2_B);
+n0_B = [-1;  0.002; 0]; n0_B = n0_B / norm(n0_B);
+n1_B = [ 0.003; -1; 0]; n1_B = n1_B / norm(n1_B);
+n2_B = [ -0.004; -1; 0]; n2_B = n2_B / norm(n2_B);
 
 % 转换到世界系
 vertices_W = (R * vertices_B')' + repmat(t', 8, 1);
@@ -76,12 +76,17 @@ rays.u = {u0, u1, u2};
 %% ========== 5. 光程计算 ==========
 h = zeros(3,1);
 h_ = zeros(3,1);
+jac= zeros(3,6);
 c_points = cell(3,1);
 b_points = cell(3,1);
 
 h_(1) = cal_light_dis(R, t, a0, u0, p0_B, n0_B);
 h_(2) = cal_light_dis(R, t, a1, u1, p1_B, n1_B);
 h_(3) = cal_light_dis(R, t, a2, u2, p2_B, n2_B);
+
+jac(1,:) = calc_jacobian(R, t, a0, u0, p0_B, n0_B);
+jac(2,:) = calc_jacobian(R, t, a1, u1, p1_B, n1_B);
+jac(3,:) = calc_jacobian(R, t, a2, u2, p2_B, n2_B);
 
 for i = 1:3
     Pi = eval(['P' num2str(i-1)]);  % P0, P1, P2
@@ -227,6 +232,191 @@ fprintf('\n光程测量值:\n');
 for i=1:3
     fprintf('  h_%d = %.10f m\n', i-1, h(i));
 end
+close all;
+%% ========== 8. LM 优化：从 h_ 反演位姿 ==========
+fprintf('\n=== 开始 LM 优化 ===\n');
+
+% --- 已知配置（来自前面定义）---
+p_B = {p0_B, p1_B, p2_B};
+n_B = {n0_B, n1_B, n2_B};
+a_list = [a0, a1, a2];   % 3×3
+u_list = [u0, u1, u2];   % 3×3
+h_meas = h_;             % 3×1，真实测量值
+
+% --- 初始猜测（故意设错，测试收敛性）---
+t0 = [0; 0; 0];                     % 初始平移 = 0
+phi0 = [0; 0; deg2rad(0)];         % 初始旋转 = 0（比真实值小）
+xi = [t0; phi0];                   % 6×1: [tx; ty; tz; phix; phiy; phiz]
+
+% --- LM 参数 ---
+max_iter = 10;
+lambda = 1e-3;
+nu = 2;
+tol = 1e-16;
+prev_cost = inf;
+
+% --- 预计算常量（镜面在本体系中的 gamma = p' * n）---
+gamma_list = zeros(3,1);
+for i = 1:3
+    gamma_list(i) = p_B{i}' * n_B{i};
+end
+
+%% ========== 数值验证雅可比（有限差分）==========
+fprintf('\n=== 数值验证雅可比 ===\n');
+
+% 当前真实位姿
+t_true = [tx; ty; tz];
+phi_true = [0; 0; theta_z];  % 因为只有 Rz
+R_true = R;
+
+% 计算解析雅可比
+J_analytic = zeros(3,6);
+for i = 1:3
+    J_analytic(i,:) = calc_jacobian(R_true, t_true, a_list(:,i), u_list(:,i), p_B{i}, n_B{i});
+end
+
+% 数值雅可比（有限差分）
+eps_fd = 1e-8;
+J_numeric = zeros(3,6);
+
+% 对6个自由度分别扰动
+for j = 1:6
+    dxi = zeros(6,1);
+    dxi(j) = eps_fd;
+    
+    if j <= 3  % 平移
+        t_pert = t_true + dxi(1:3);
+        R_pert = R_true;
+    else       % 旋转（李代数加法）
+        phi_pert = phi_true + dxi(4:6);
+        R_pert = rodrigues(phi_pert);
+        t_pert = t_true;
+    end
+    
+    h_pert = zeros(3,1);
+    for i = 1:3
+        h_pert(i) = cal_light_dis(R_pert, t_pert, a_list(:,i), u_list(:,i), p_B{i}, n_B{i});
+    end
+    
+    h_nom = h_;  % 真实测量值（在真实位姿下计算）
+    J_numeric(:,j) = (h_pert - h_nom) / eps_fd;
+end
+
+% 比较
+diff_J = J_analytic - J_numeric;
+fprintf('最大雅可比误差: %.2e\n', max(abs(diff_J(:))));
+fprintf('解析雅可比 (第3行，旋转Z列):\n');
+disp(J_analytic(3,:));
+fprintf('数值雅可比 (第3行，旋转Z列):\n');
+disp(J_numeric(3,:));
+
+N = 20000;
+tic;  % ←←← 开始计时
+for k = 1:N
+    % --- LM 主循环 ---
+    for iter = 1:max_iter
+        % 当前估计
+        t_est = xi(1:3);
+        phi_est = xi(4:6);
+        R_est = rodrigues(phi_est);  % 从李代数恢复旋转
+        
+        % 前向计算预测光程 h_pred 和雅可比 J
+        h_pred = zeros(3,1);
+        J = zeros(3,6);
+        for i = 1:3
+            a_i = a_list(:,i);
+            u_i = u_list(:,i);
+            p_i = p_B{i};
+            n_i = n_B{i};
+            
+            h_pred(i) = cal_light_dis(R_est, t_est, a_i, u_i, p_i, n_i);
+            J(i,:) = calc_jacobian(R_est, t_est, a_i, u_i, p_i, n_i);  % 已修正顺序！
+        end
+        
+        % 残差
+        r = h_pred - h_meas;   % 3×1
+        cost = 0.5 * sum(r.^2);
+        
+        % fprintf('Iter %2d: cost = %.3e\n', iter, cost);
+        
+        % 收敛判断
+        if abs(prev_cost - cost) < tol
+            % fprintf('Converged by cost change.\n');
+            break;
+        end
+        prev_cost = cost;
+        
+        % if norm(r) < 1e-12
+        %     % fprintf('Converged by residual norm.\n');
+        %     break;
+        % end
+        
+        % LM 法方程: (J'*J + lambda*I) * dx = -J'*r
+        A = J' * J + lambda * eye(6);
+        b = -J' * r;
+        dx = A \ b;   % 6×1: [dt; dphi]
+        
+        % 尝试更新
+        xi_new = xi + dx;
+        t_new = xi_new(1:3);
+        phi_new = xi_new(4:6);
+        R_new = rodrigues(phi_new);
+        
+        % 计算新残差
+        h_new = zeros(3,1);
+        for i = 1:3
+            h_new(i) = cal_light_dis(R_new, t_new, a_list(:,i), u_list(:,i), p_B{i}, n_B{i});
+        end
+        r_new = h_new - h_meas;
+        cost_new = 0.5 * sum(r_new.^2);
+        
+        % 计算增益 ratio
+        rho = (cost - cost_new) / (0.5 * dx' * (lambda * dx - J' * r));
+        
+        % 接受或拒绝更新
+        if rho > 0
+            xi = xi_new;
+            lambda = lambda * max(1/3, 1 - (2*rho - 1)^3);
+            nu = 2;
+            % fprintf('  Accepted. lambda = %.2e\n', lambda);
+        else
+            lambda = lambda * nu;
+            nu = 2 * nu;
+            % fprintf('  Rejected. lambda = %.2e\n', lambda);
+        end
+        
+        if lambda > 1e10
+            error('LM failed: lambda too large.');
+        end
+    end
+end
+
+elapsed_time_us = toc * 1000000 / N;  % ←←← 结束计时，转为毫秒
+fprintf('优化耗时: %.6f us\n', elapsed_time_us);
+
+% --- 提取最终结果 ---
+t_opt = xi(1:3);
+phi_opt = xi(4:6);
+R_opt = rodrigues(phi_opt);
+
+true_t = t;
+true_phi = R_to_phi(R_true);
+trans_error_mm = (t_opt - t) * 1000;        % 平移误差 → mm
+rot_error_rad  = phi_opt - true_phi;             % 旋转李代数误差 → 弧度
+
+% 转换为欧拉角（Z-Y-X，与你生成方式一致）
+[theta_x_opt, theta_y_opt, theta_z_opt] = rot2euler(R_opt);
+
+fprintf('\n=== 优化结果 vs 真实值 ===\n');
+fprintf('平移 (mm):     真实 [%.3f, %.3f, %.3f] -> 估计 [%.3f, %.3f, %.3f]\n', ...
+        tx*1000, ty*1000, tz*1000, t_opt(1)*1000, t_opt(2)*1000, t_opt(3)*1000);
+fprintf('旋转 (deg):    真实 [%.3f, %.3f, %.3f] -> 估计 [%.3f, %.3f, %.3f]\n', ...
+        rad2deg([theta_x, theta_y, theta_z]), ...
+        rad2deg([theta_x_opt, theta_y_opt, theta_z_opt]));
+fprintf('平移李代数误差 (nm): %e, %e, %e\n', trans_error_mm * 1e6);
+fprintf('旋转李代数误差 (nrad): %e, %e, %e\n', rot_error_rad * 1e6);
+
+%% 函数定义
 
 function h = cal_light_dis(R, t, a, u, p, n)
     N = R * n;
@@ -237,4 +427,88 @@ function h = cal_light_dis(R, t, a, u, p, n)
     f = beta / (2*beta^2 - 1);
     g = ga + de;
     h = f * g;
+end
+
+function jac = calc_jacobian(R, t, a, u, p, n) 
+    N = R * n;
+    beta = dot(u, N);
+    ga = dot(p, n);
+    d = t - a;
+    de = dot(d, N);
+    f = beta / (2*beta^2 - 1);
+    g = ga + de;
+    alph = -(2*beta^2 + 1) / (2*beta^2 - 1)^2;
+
+    pt = f * N';
+    ph = -transpose(alph * g * u + f * d) * skew_matrix(N);
+
+    jac = [pt, ph];
+end
+
+function maa = skew_matrix(a)
+    maa = [  0, -a(3),  a(2);
+          a(3),   0, -a(1);
+         -a(2), a(1),   0];
+end
+
+% --- 辅助函数：从旋转矩阵提取 ZYX 欧拉角 ---
+function [rx, ry, rz] = rot2euler(R)
+    % R = Rz * Ry * Rx
+    ry = atan2(-R(3,1), sqrt(R(1,1)^2 + R(2,1)^2));
+    if abs(ry - pi/2) < 1e-6
+        rx = 0;
+        rz = atan2(R(1,2), R(1,3));
+    elseif abs(ry + pi/2) < 1e-6
+        rx = 0;
+        rz = atan2(R(1,2), R(1,3));
+    else
+        rx = atan2(R(3,2), R(3,3));
+        rz = atan2(R(2,1), R(1,1));
+    end
+end
+
+function R = rodrigues(phi)
+    theta = norm(phi);
+    if theta < 1e-8
+        R = eye(3);
+    else
+        k = phi / theta;
+        K = skew_matrix(k);
+        % R = eye(3) + sin(theta)*K + (1-cos(theta))*K*K;
+        R = cos(theta)*eye(3) + (1-cos(theta))*(k*k') + sin(theta)*K;
+    end
+end
+
+function phi = R_to_phi(R)
+% 将 SO(3) 中的旋转矩阵 R 转换为 so(3) 中的旋转向量 phi
+% 输入: R (3x3 旋转矩阵)
+% 输出: phi (3x1 向量，单位：弧度)
+
+    % 确保 R 是有效的旋转矩阵（可选）
+    assert(all(size(R) == [3,3]), 'R must be 3x3');
+    
+    % 计算旋转角 theta
+    cos_theta = (trace(R) - 1) / 2;
+    cos_theta = max(-1.0, min(1.0, cos_theta)); % 防止数值误差导致 acos 越界
+    theta = acos(cos_theta);
+
+    if theta < 1e-12
+        % 情况1: 无旋转 → phi = [0;0;0]
+        phi = zeros(3,1);
+    elseif theta > pi - 1e-6
+        % 情况2: 接近180度旋转（数值不稳定，需特殊处理）
+        % 利用 R + I 的最大对角元确定主轴
+        A = (R + eye(3)) / 2;
+        [~, idx] = max(diag(A));
+        n = A(:, idx) / norm(A(:, idx));
+        phi = pi * n;
+    else
+        % 情况3: 一般情况
+        sin_theta = sin(theta);
+        nx = (R(3,2) - R(2,3)) / (2*sin_theta);
+        ny = (R(1,3) - R(3,1)) / (2*sin_theta);
+        nz = (R(2,1) - R(1,2)) / (2*sin_theta);
+        n = [nx; ny; nz];
+        phi = theta * n;
+    end
 end

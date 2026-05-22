@@ -10,10 +10,10 @@ clear; clc; close all;
 %% ========== 1. 真实位姿参数（6DoF，显式设零）==========
 theta_x = deg2rad(0);           % 绕X轴旋转（设为0）
 theta_y = deg2rad(0);           % 绕Y轴旋转（设为0）
-theta_z = deg2rad(10);         % 绕Z轴旋转（非零）
+theta_z = deg2rad(0.005);         % 绕Z轴旋转（非零）
 
-tx = 0.001;             % X平移
-ty = 0;           % Y平移
+tx = 0.0013435;             % X平移
+ty = 0.02454365;           % Y平移
 tz = 0;                % Z平移（设为0）
 
 t = [tx; ty; tz];
@@ -266,7 +266,7 @@ fprintf('\n=== 数值验证雅可比 ===\n');
 
 % 当前真实位姿
 t_true = [tx; ty; tz];
-phi_true = [0; 0; theta_z];  % 因为只有 Rz
+phi_true = R_to_phi(R);
 R_true = R;
 
 % 计算解析雅可比

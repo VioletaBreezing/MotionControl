@@ -21,7 +21,7 @@ function T = se3_to_SE3(xi)
     theta = norm(phi);
     
     % 初始化 R 和 rho
-    if theta < 1e-8
+    if abs(theta) < 1e-8
         % 小角度近似：R ≈ I, t ≈ [1;1;1]
         R = eye(3);
         t = rho;

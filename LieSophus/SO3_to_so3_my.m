@@ -11,7 +11,7 @@ function phi = SO3_to_so3_my(R)
     cos_theta = max(-1.0, min(1.0, cos_theta)); % 防止数值误差导致 acos 越界
     theta = acos(cos_theta);
 
-    if theta < 1e-10
+    if abs(theta) < 1e-10
         % 情况1: 无旋转 → phi = [0;0;0]
         phi = zeros(3,1);
     elseif theta > pi - 1e-6

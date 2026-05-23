@@ -1,6 +1,6 @@
 function J = J_left(phi)
     theta = norm(phi);
-    if theta < 1e-10
+    if abs(theta) < 1e-10
         J = eye(3);
     else
         a = phi / theta;

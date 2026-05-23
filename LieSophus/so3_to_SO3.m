@@ -1,6 +1,6 @@
 function R = so3_to_SO3(phi)
     theta = norm(phi);
-    if theta < 1e-8
+    if abs(theta) < 1e-8
         R = eye(3);
     else
         k = phi / theta;

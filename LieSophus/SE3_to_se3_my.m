@@ -7,5 +7,5 @@ function xi = SE3_to_se3_my(T)
     phi = SO3_to_so3_my(R);
     J = J_left(phi);
     rho = J\t;
-    xi = [rho, phi];
+    xi = [rho; phi];
 end

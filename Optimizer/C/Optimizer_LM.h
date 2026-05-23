@@ -4,7 +4,7 @@
 #include "MatrixMath.h"
 
 // 精度类型定义（与LieSophus保持一致）
-#ifdef LIE_SOPHUS_USE_FLOAT
+#if defined(MATRIXMATH_USE_FLOAT) && MATRIXMATH_USE_FLOAT == 1
 typedef float opt_scalar_t;
 #else
 typedef double opt_scalar_t;

@@ -116,7 +116,7 @@ int main() {
     QueryPerformanceFrequency(&frequency);
     QueryPerformanceCounter(&start_time);
 
-    int times_cnt = 1;
+    int times_cnt = 50;
     int status;
     lie_scalar_t T[16];
     lie_scalar_t R_est[9];

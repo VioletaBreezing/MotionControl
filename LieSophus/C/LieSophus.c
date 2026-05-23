@@ -3,6 +3,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+// 如果 M_PI 仍未定义，则手动定义
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 #ifndef LIE_SOPHUS_USE_FLOAT
 #define LIE_SOPHUS_USE_FLOAT 0
 #endif

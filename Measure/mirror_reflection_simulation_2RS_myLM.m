@@ -252,7 +252,7 @@ xi = [t0; phi0];                   % 6×1: [tx; ty; tz; phix; phiy; phiz]
 
 % --- LM 参数 ---
 max_iter = 5;
-lambda = 1e-2;
+lambda = 1e-3;
 nu = 2;
 TolX = 1e-9;
 TolR = 1e-9;

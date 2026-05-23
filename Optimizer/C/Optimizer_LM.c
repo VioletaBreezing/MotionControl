@@ -40,7 +40,7 @@ static opt_scalar_t dx_new_buffer[OPT_LM_MAX_PARAM_SIZE];
 #endif
 
 // 辅助函数实现（向量操作保留，因为MatrixMath没有提供）
-opt_scalar_t vector_norm(const opt_scalar_t* v, int n) {
+opt_scalar_t opt_vector_norm(const opt_scalar_t* v, int n) {
     opt_scalar_t sum = 0.0;
     for (int i = 0; i < n; i++) {
         sum += v[i] * v[i];
@@ -48,7 +48,7 @@ opt_scalar_t vector_norm(const opt_scalar_t* v, int n) {
     return opt_sqrt(sum);
 }
 
-opt_scalar_t vector_dot(const opt_scalar_t* a, const opt_scalar_t* b, int n) {
+opt_scalar_t opt_vector_dot(const opt_scalar_t* a, const opt_scalar_t* b, int n) {
     opt_scalar_t sum = 0.0;
     for (int i = 0; i < n; i++) {
         sum += a[i] * b[i];
@@ -142,7 +142,7 @@ int Optimizer_LM(
     result->converged = 0;
     result->iter = 0;
     result->final_cost = 0.0;
-    
+
     // 主迭代循环
     for (int iter = 1; iter <= MaxIter; iter++) {
         // 计算残差和雅可比矩阵
@@ -150,7 +150,7 @@ int Optimizer_LM(
         JacobiFcn(x, Jargs, J);
         
         // 计算代价函数
-        opt_scalar_t cost = 0.5 * vector_dot(r, r, residual_size);
+        opt_scalar_t cost = 0.5 * opt_vector_dot(r, r, residual_size);
         
         // 构建正规方程: (J'J + lambda*I) * dx = -J'r
         // 使用MatrixMath库进行矩阵运算
@@ -206,7 +206,7 @@ int Optimizer_LM(
         if (MatrixMath_Invert(A_copy, param_size) != 0) {
             // 矩阵不可逆
             if (debug) {
-                printf("[%s]: Matrix inversion failed at iteration %d\n", __func__, iter);
+                printf("Optimizer_LM: Matrix inversion failed at iteration %d\n", iter);
             }
 #if !OPT_LM_FORBIDDEN_DYNAMIC_ALLOCATION
             FREE_PTR(dx_new); FREE_PTR(A_copy); FREE_PTR(A); FREE_PTR(JT); FREE_PTR(JTJ); FREE_PTR(JTr);
@@ -222,13 +222,13 @@ int Optimizer_LM(
         
         // 调试输出
         if (debug) {
-            printf("[%s]: Iter %2d: cost = %.3e\n", __func__, iter, cost);
+            printf("[Optimizer_LM] Iter %2d: cost = %.3e\n", iter, cost);
         }
         
         // 收敛判断1: 残差足够小
-        if (vector_norm(r, residual_size) < TolR) {
+        if (opt_vector_norm(r, residual_size) < TolR) {
             if (debug) {
-                printf("[%s]: Converged by residual norm.\n", __func__);
+                printf("[Optimizer_LM]: Converged by residual norm.\n");
             }
             result->converged = 1;
             result->iter = iter;
@@ -245,14 +245,15 @@ int Optimizer_LM(
         }
         
         // 收敛判断2: 参数变化足够小
-        if (vector_norm(dx, param_size) < TolX) {
-            if (vector_norm(r, residual_size) > TolR) {
+        if (opt_vector_norm(dx, param_size) < TolX) {
+            if (opt_vector_norm(r, residual_size) > TolR) {
                 if (debug) {
-                    printf("[%s]: LM failed: Residual(%.3e) norm cannot converge.\n", __func__, vector_norm(r, residual_size));
+                    printf("[Optimizer_LM] LM failed: Residual(%.3e) norm cannot converge.\n", 
+                           opt_vector_norm(r, residual_size));
                 }
             }
             if (debug) {
-                printf("[%s]: Ended iteration by X change.\n", __func__);
+                printf("[Optimizer_LM]: Ended iteration by X change.\n");
             }
             result->converged = 0;
             result->iter = iter;
@@ -274,13 +275,14 @@ int Optimizer_LM(
         }
         
         ResFcn(x_new, Rargs, r_new);
-        opt_scalar_t cost_new = 0.5 * vector_dot(r_new, r_new, residual_size);
+        opt_scalar_t cost_new = 0.5 * opt_vector_dot(r_new, r_new, residual_size);
         
         // 计算rho
         opt_scalar_t numerator = cost - cost_new;
-        opt_scalar_t denominator = 0.5 * vector_dot(dx, dx, param_size) * lambda - 
-                                  0.5 * vector_dot(dx, JTr, param_size);
-        opt_scalar_t rho = (denominator > OPT_EPS) ? (numerator / denominator) : 0.0;
+        opt_scalar_t denominator = 0.5 * opt_vector_dot(dx, dx, param_size) * lambda - 
+                                  0.5 * opt_vector_dot(dx, JTr, param_size);
+        // opt_scalar_t rho = (denominator > OPT_EPS) ? (numerator / denominator) : 0.0;
+        opt_scalar_t rho = numerator / denominator;
         
         // 接受或拒绝更新
         if (rho > 0) {
@@ -298,7 +300,7 @@ int Optimizer_LM(
         // lambda过大检查
         if (lambda > TolLamda) {
             if (debug) {
-                printf("[%s]: failed: lambda = %.4e too large.\n", __func__, lambda);
+                printf("[Optimizer_LM] failed: lambda = %.4e too large.\n", lambda);
             }
             result->converged = 0;
             result->iter = iter;
@@ -323,7 +325,7 @@ int Optimizer_LM(
     // 达到最大迭代次数
     result->converged = 0;
     result->iter = MaxIter;
-    result->final_cost = 0.5 * vector_dot(r, r, residual_size);
+    result->final_cost = 0.5 * opt_vector_dot(r, r, residual_size);
     memcpy(result->x_hat, x, param_size * sizeof(opt_scalar_t));
     memcpy(result->resnorm, r, residual_size * sizeof(opt_scalar_t));
     

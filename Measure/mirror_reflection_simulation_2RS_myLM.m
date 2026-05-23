@@ -7,7 +7,7 @@
 
 clear; clc; close all;
 
-
+path_include;
 
 %% ========== 1. 真实位姿参数（6DoF，显式设零）==========
 theta_x = deg2rad(0);           % 绕X轴旋转（设为0）

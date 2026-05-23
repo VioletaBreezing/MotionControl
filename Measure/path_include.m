@@ -1,3 +1,3 @@
-addpath("./Measure/");
-addpath("./LieSophus/");
-addpath("./Optimizer/");
+addpath("../Measure/");
+addpath("../LieSophus/");
+addpath("../Optimizer/");

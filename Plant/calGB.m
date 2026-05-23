@@ -12,5 +12,5 @@ GBv_inv= [1, 1, 1;
           RV, -1/2*RV, -1/2*RV;
           0, -sqrt(3)/2*RV, sqrt(3)/2*RV];
 
-GB_h = inv(GBh_inv)
-GB_v = inv(GBv_inv)
+GB_h = eye(3)/(GBh_inv)
+GB_v = eye(3)/(GBv_inv)

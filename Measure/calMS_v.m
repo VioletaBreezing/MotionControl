@@ -1,8 +1,8 @@
 clear; clc;
 
-z1 = 0e-3;
+z1 = 1e-3;
 z2 = 1e-3;
-z3 = 0e-3;
+z3 = -1e-3;
 
 z = [z1; z2; z3];
 
@@ -35,5 +35,6 @@ res2 = [-1/E(3);
 
 res
 res2
+err = norm(res - res2)
 
 %% MS 水平

@@ -3,6 +3,9 @@ function [x_hat, resnorm, converged, iter] = Optimizer_LM(...
         x0, ...
         TolX, TolR, TolLamda, MaxIter, ...
         debug)
+    % ResFcn - 残差函数，输入x和Rargs，输出残差向量r
+    % JacobiFcn - 雅可比矩阵函数，输入x和Jargs，输出雅可比矩阵J
+    % x0 - 初始参数估计
 
     lambda = 1e-3;
     nu = 2;

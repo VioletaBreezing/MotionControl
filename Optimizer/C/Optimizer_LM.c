@@ -111,7 +111,7 @@ int Optimizer_LM(
         return -1; // 结果内存未分配
     }
 
-    printf("[%s]: LM Optimizer Using Static Memory.\n", __func__);
+    // printf("[%s]: LM Optimizer Using Static Memory.\n", __func__);
     
 #else
     // 动态内存分配模式

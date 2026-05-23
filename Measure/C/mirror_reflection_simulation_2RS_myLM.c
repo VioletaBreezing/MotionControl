@@ -194,7 +194,11 @@ int mirror_reflection_pose_optimization(
     opt_args.num_rays = num_rays;
     
     // 设置LM参数
+    opt_scalar_t x_result[6];
+    opt_scalar_t r_result[6];
     lm_result_t result;
+    result.x_hat = x_result;
+    result.resnorm = r_result;
     
     int status = Optimizer_LM(
         Get_RS2_IFM_MS_ResFcn,

@@ -56,3 +56,6 @@ license_*.dat
 .idea/
 *.swp
 *.swo
+
+# test files
+test*

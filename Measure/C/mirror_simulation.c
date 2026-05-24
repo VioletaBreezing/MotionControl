@@ -121,11 +121,13 @@ int main() {
     QueryPerformanceCounter(&start_time);
 
     int times_cnt = 20000;
-    int status;
+    int status = 0;
     lie_scalar_t T[16];
     lie_scalar_t R_est[9];
     lie_scalar_t t_est[3];
-    for(int i = 0; i < times_cnt; i++)
+    lie_scalar_t max_trans_error[3] = {0.0, 0.0, 0.0};
+    lie_scalar_t max_rot_error[3] = {0.0, 0.0, 0.0};
+    for(int i = 0; i < times_cnt && status == 0; i++)
     {
         QueryPerformanceCounter(&start_time_iter);
 
@@ -173,9 +175,9 @@ int main() {
             xi0,
             xi_result,
             final_residual,
-            20,     // max_iter
-            1e-9,  // tol_x (更严格的收敛条件)
-            1e-9   // tol_r (更严格的收敛条件)
+            100,     // max_iter
+            1e-11,  // tol_x (更严格的收敛条件)
+            1e-11   // tol_r (更严格的收敛条件)
         );
 
         se3_to_SE3(xi_result, T);
@@ -189,6 +191,14 @@ int main() {
         QueryPerformanceCounter(&end_time);
         double iter_time_used = (double)(end_time.QuadPart - start_time_iter.QuadPart) / frequency.QuadPart;
         max_exec_time = min(max_exec_time, iter_time_used);
+
+        max_trans_error[0] = max(max_trans_error[0], fabs(t_est[0] - tx));
+        max_trans_error[1] = max(max_trans_error[1], fabs(t_est[1] - ty));
+        max_trans_error[2] = max(max_trans_error[2], fabs(t_est[2] - tz));
+
+        max_rot_error[0] = max(max_rot_error[0], fabs(xi_result[3] - theta_x));
+        max_rot_error[1] = max(max_rot_error[1], fabs(xi_result[4] - theta_y));
+        max_rot_error[2] = max(max_rot_error[2], fabs(xi_result[5] - theta_z));
     }
     
     QueryPerformanceCounter(&end_time);
@@ -218,6 +228,11 @@ int main() {
                trans_error[0]*1e9, trans_error[1]*1e9, trans_error[2]*1e9);
         printf("Rotation error (nrad):  [%.2e, %.2e, %.2e]\n", 
                rot_error[0]*1e9, rot_error[1]*1e9, rot_error[2]*1e9);
+
+        printf("\nMaximum translation error (nm): [%.3e, %.3e, %.3e]\n", 
+               max_trans_error[0]*1e9, max_trans_error[1]*1e9, max_trans_error[2]*1e9);
+        printf("Maximum rotation error (nrad):  [%.3e, %.3e, %.3e]\n", 
+               max_rot_error[0]*1e9, max_rot_error[1]*1e9, max_rot_error[2]*1e9);
         
         printf("\nFinal residuals (nm):   [%.2e, %.2e, %.2e]\n", 
                 final_residual[0]*1e9, final_residual[1]*1e9, final_residual[2]*1e9);

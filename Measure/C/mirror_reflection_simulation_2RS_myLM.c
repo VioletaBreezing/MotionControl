@@ -165,13 +165,12 @@ void Get_RS2_IFM_MS_Jacobian(const opt_scalar_t* xi, void* args, opt_scalar_t* j
                      jac_6d);
         
         // 将6D雅可比复制到输出矩阵中
-        // jacobian是 num_rays x 6 的矩阵，按行存储
-        for (int j = 0; j < 6; j++) {
-            jacobian[i * 6 + j] = jac_6d[j];
-        }
+        jacobian[i * 6 + 0] = jac_6d[0];
+        jacobian[i * 6 + 1] = jac_6d[1];
         jacobian[i * 6 + 2] = 0.;
         jacobian[i * 6 + 3] = 0.;
         jacobian[i * 6 + 4] = 0.;
+        jacobian[i * 6 + 5] = jac_6d[5];
     }
 }
 

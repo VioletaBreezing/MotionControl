@@ -3,9 +3,12 @@
 #include <math.h>
 #include <string.h>
 #include <windows.h>
+#include <time.h>
 
 int main() {
     printf("=== Testing Mirror Reflection Pose Optimization with Real Initial Guess ===\n");
+
+    srand((unsigned int)time(NULL));
     
     // 设置真实位姿参数（与MATLAB一致）
     lie_scalar_t theta_x = 0.0;           // 绕X轴旋转（设为0）
@@ -42,9 +45,9 @@ int main() {
     lie_scalar_t p2_B[3] = {d/2, -Ly/2, 0};
     
     // 镜面法向（本体系）
-    lie_scalar_t n0_B[3] = {-1, 0, 0};
-    lie_scalar_t n1_B[3] = {0, -1, 0};
-    lie_scalar_t n2_B[3] = {0, -1, 0};
+    lie_scalar_t n0_B[3] = {-1, 0.1, -0.1};
+    lie_scalar_t n1_B[3] = {0.05, -1, -0.02};
+    lie_scalar_t n2_B[3] = {-0.12, -1, 0.08};
     
     // 归一化法向
     lie_scalar_t norm_n0 = sqrt(n0_B[0]*n0_B[0] + n0_B[1]*n0_B[1] + n0_B[2]*n0_B[2]);
@@ -55,7 +58,7 @@ int main() {
     n2_B[0] /= norm_n2; n2_B[1] /= norm_n2; n2_B[2] /= norm_n2;
     
     // 入射光线
-    lie_scalar_t a0[3] = {-0.3, 0.0, 0.0};
+    lie_scalar_t a0[3] = {-0.3, 0.02, 0.0};
     lie_scalar_t u0[3] = {1.0, 0.01, -0.01};
     lie_scalar_t a1[3] = {-d/2, -0.3, 0.0};
     lie_scalar_t u1[3] = {-0.01, 1.0, 0.02};
@@ -112,27 +115,67 @@ int main() {
     lie_scalar_t xi_result[6];
     lie_scalar_t final_residual[3];
     
-    LARGE_INTEGER frequency, start_time, end_time;
+    LARGE_INTEGER frequency, start_time, start_time_iter, end_time;
+    double max_exec_time = 1e12;
     QueryPerformanceFrequency(&frequency);
     QueryPerformanceCounter(&start_time);
 
-    int times_cnt = 50;
+    int times_cnt = 20000;
     int status;
     lie_scalar_t T[16];
     lie_scalar_t R_est[9];
     lie_scalar_t t_est[3];
     for(int i = 0; i < times_cnt; i++)
     {
+        QueryPerformanceCounter(&start_time_iter);
+
+        theta_z = (lie_scalar_t)rand() / RAND_MAX * 2.0 - 1.0;
+        theta_z *= 2e-3; // 旋转范围在±1 mrad内
+        
+        tx = (lie_scalar_t)rand() / RAND_MAX * 2.0 - 1.0;
+        ty = (lie_scalar_t)rand() / RAND_MAX * 2.0 - 1.0;
+        tx *= 13e-2; // 平移范围在±1 mm内
+        ty *= 13e-2;
+
+        h_meas[0] = cal_light_dis(R_true, t_true, a0, u0, p0_B, n0_B);
+        h_meas[1] = cal_light_dis(R_true, t_true, a1, u1, p1_B, n1_B);
+        h_meas[2] = cal_light_dis(R_true, t_true, a2, u2, p2_B, n2_B);
+
+        cos_x = cos(theta_x), sin_x = sin(theta_x);
+        cos_y = cos(theta_y), sin_y = sin(theta_y);
+        cos_z = cos(theta_z), sin_z = sin(theta_z);
+        
+        Rx[0] = 1; Rx[1] = 0;     Rx[2] = 0;
+        Rx[3] = 0; Rx[4] = cos_x; Rx[5] = -sin_x;
+        Rx[6] = 0; Rx[7] = sin_x; Rx[8] = cos_x;
+
+        Ry[0] = cos_y;  Ry[1] = 0; Ry[2] = sin_y;
+        Ry[3] = 0;      Ry[4] = 1; Ry[5] = 0;
+        Ry[6] = -sin_y; Ry[7] = 0; Ry[8] = cos_y;
+
+        Rz[0] = cos_z; Rz[1] = -sin_z; Rz[2] = 0;
+        Rz[3] = sin_z; Rz[4] = cos_z;  Rz[5] = 0;
+        Rz[6] = 0;     Rz[7] = 0;      Rz[8] = 1;
+        
+        MatrixMath_Multiply(Rz, Ry, 3, 3, 3, R_temp);
+        MatrixMath_Multiply(R_temp, Rx, 3, 3, 3, R_true);
+    
+        t_true[0] = tx; t_true[1] = ty; t_true[2] = tz;
+
+        h_meas[0] = cal_light_dis(R_true, t_true, a0, u0, p0_B, n0_B);
+        h_meas[1] = cal_light_dis(R_true, t_true, a1, u1, p1_B, n1_B);
+        h_meas[2] = cal_light_dis(R_true, t_true, a2, u2, p2_B, n2_B);
+
         status = mirror_reflection_pose_optimization(
-        rays,
-        h_meas,
-        3,
-        xi0,
-        xi_result,
-        final_residual,
-        5,     // max_iter
-        1e-9,  // tol_x (更严格的收敛条件)
-        1e-9   // tol_r (更严格的收敛条件)
+            rays,
+            h_meas,
+            3,
+            xi0,
+            xi_result,
+            final_residual,
+            20,     // max_iter
+            1e-9,  // tol_x (更严格的收敛条件)
+            1e-9   // tol_r (更严格的收敛条件)
         );
 
         se3_to_SE3(xi_result, T);
@@ -142,6 +185,10 @@ int main() {
         R_est[6] = T[8]; R_est[7] = T[9]; R_est[8] = T[10];
 
         t_est[0] = T[3]; t_est[1] = T[7]; t_est[2] = T[11];
+
+        QueryPerformanceCounter(&end_time);
+        double iter_time_used = (double)(end_time.QuadPart - start_time_iter.QuadPart) / frequency.QuadPart;
+        max_exec_time = min(max_exec_time, iter_time_used);
     }
     
     QueryPerformanceCounter(&end_time);
@@ -155,12 +202,12 @@ int main() {
 
         printf("\n✅ Optimization successful!\n");
         printf("Estimated pose:\n");
-        printf("Translation: [%.9f, %.9f, %.9f] m\n", t_est[0], t_est[1], t_est[2]);
-        printf("Rotation:    [%.9f, %.9f, %.9f] rad\n", xi_result[3], xi_result[4], xi_result[5]);
+        printf("Translation (mm): [%.7f, %.7f, %.7f]\n", t_est[0] * 1e3, t_est[1] * 1e3, t_est[2] * 1e3);
+        printf("Rotation (mrad):  [%.7f, %.7f, %.7f]\n", xi_result[3] * 1e3, xi_result[4] * 1e3, xi_result[5] * 1e3);
         
         printf("\nTrue pose:\n");
-        printf("Translation: [%.9f, %.9f, %.9f] m\n", tx, ty, tz);
-        printf("Rotation:    [%.9f, %.9f, %.9f] rad\n", theta_x, theta_y, theta_z);
+        printf("Translation (mm): [%.7f, %.7f, %.7f]\n", tx * 1e3, ty * 1e3, tz * 1e3);
+        printf("Rotation (mrad):  [%.7f, %.7f, %.7f]\n", theta_x * 1e3, theta_y * 1e3, theta_z * 1e3);
         
         // 计算误差
         lie_scalar_t trans_error[3] = {t_est[0] - tx, t_est[1] - ty, t_est[2] - tz};
@@ -172,8 +219,8 @@ int main() {
         printf("Rotation error (nrad):  [%.2e, %.2e, %.2e]\n", 
                rot_error[0]*1e9, rot_error[1]*1e9, rot_error[2]*1e9);
         
-        printf("\nFinal residuals:\n");
-        printf("[%.3e, %.3e, %.3e]\n", final_residual[0], final_residual[1], final_residual[2]);
+        printf("\nFinal residuals (nm):   [%.2e, %.2e, %.2e]\n", 
+                final_residual[0]*1e9, final_residual[1]*1e9, final_residual[2]*1e9);
         
         // 检查是否成功收敛到真实值
         lie_scalar_t trans_error_norm = sqrt(trans_error[0]*trans_error[0] + trans_error[1]*trans_error[1] + trans_error[2]*trans_error[2]);
@@ -188,6 +235,7 @@ int main() {
         }
         
         printf("\n⏱️  Execution time: %.6f us\n", cpu_time_used * 1e6);
+        printf("Maximum execution time: %.6f us\n", max_exec_time * 1e6);
     } else {
         printf("❌ Optimization failed with status: %d\n", status);
         printf("Execution time: %.6f seconds\n", cpu_time_used);

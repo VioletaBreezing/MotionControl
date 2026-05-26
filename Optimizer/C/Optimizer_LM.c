@@ -27,11 +27,13 @@
 #define opt_fabs fabs
 #define opt_pow pow
 #define opt_fmax fmax
-#define OPT_EPS 1e-14
+#define OPT_EPS 1e-12
 #endif
 // #endif
 
+#ifdef SOC_C6678
 #include <ti/dsplib/dsplib.h>
+#endif
 
 // 静态内存缓冲区（仅在禁用动态分配时使用）
 #if OPT_LM_FORBIDDEN_DYNAMIC_ALLOCATION
@@ -192,7 +194,7 @@ int Optimizer_LM(
     
     // 初始化
     memcpy(x, x0, param_size * sizeof(opt_scalar_t));
-    opt_scalar_t lambda = 1e-3;
+    opt_scalar_t lambda = 1e-5;
     opt_scalar_t nu = 2.0;
     result->converged = 0;
     result->iter = 0;
@@ -201,6 +203,8 @@ int Optimizer_LM(
     // 主迭代循环
     int iter;
     for (iter = 1; iter <= MaxIter; iter++) {
+        int i;
+
         // 计算残差和雅可比矩阵
         ResFcn(x, Rargs, r);
         JacobiFcn(x, Jargs, J);
@@ -245,12 +249,19 @@ int Optimizer_LM(
         memset(dx_new, 0x00, param_size * sizeof(opt_scalar_t));
         
         // 计算 J' (转置)
+        #ifdef SOC_6678
         DSPF_dp_mat_trans(J, residual_size, param_size, JT);
-        // MatrixMath_Transpose(J, residual_size, param_size, JT);
+        #else
+        MatrixMath_Transpose(J, residual_size, param_size, JT);
+        #endif
         
         // 计算 A = JTJ = J' * J
         // MatrixMath_Multiply(JT, J, param_size, residual_size, param_size, A);
+        #ifdef SOC_6678
         DSPF_dp_mat_mul_gemm_cn(JT, 1.0, param_size, residual_size, J, param_size, A);
+        #else
+        MatrixMath_Multiply(JT, J, param_size, residual_size, param_size, A);
+        #endif
         
         // 计算 JTr = J' * r
         MatrixMath_Multiply(JT, r, param_size, residual_size, 1, JTr);
@@ -259,12 +270,12 @@ int Optimizer_LM(
         // A = A + lambda * I
         // memcpy(A, L, param_size * param_size * sizeof(opt_scalar_t));
         // 添加lambda到对角线
-        // int i;
-        // for (i = 0; i < param_size; i++) {
-        //     A[i * param_size + i] += lambda;
-        // }
-        A[0] += lambda;  A[7] += lambda;  A[14] += lambda;
-        A[21] += lambda; A[28] += lambda; A[35] += lambda;
+        
+        for (i = 0; i < param_size; i++) {
+            A[i * param_size + i] += lambda;
+        }
+        // A[0] += lambda;  A[7] += lambda;  A[14] += lambda;
+        // A[21] += lambda; A[28] += lambda; A[35] += lambda;
         
         // b = -JTr
         // for (i = 0; i < param_size; i++) {
@@ -274,30 +285,32 @@ int Optimizer_LM(
         b[3] = -JTr[3]; b[4] = -JTr[4]; b[5] = -JTr[5];
         
         // 求解线性方程组 A * dx = b
-        // memcpy(A_copy, A, param_size * param_size * sizeof(opt_scalar_t));
+        memcpy(A_copy, A, param_size * param_size * sizeof(opt_scalar_t));
         
         // 使用MatrixMath的矩阵求逆
-//         if (MatrixMath_Invert(A_copy, param_size) != 0) {
-//             // 矩阵不可逆
-//             if (debug) {
-//                 printf("Optimizer_LM: Matrix inversion failed at iteration %d\n", iter);
-//             }
-// #if !OPT_LM_FORBIDDEN_DYNAMIC_ALLOCATION
-//             FREE_PTR(dx_new); FREE_PTR(A_copy); FREE_PTR(A); FREE_PTR(JT); FREE_PTR(L); FREE_PTR(JTr);
-//             FREE_PTR(x); FREE_PTR(r); FREE_PTR(J); FREE_PTR(dx); FREE_PTR(x_new); FREE_PTR(r_new);
-//             FREE_PTR(result->x_hat); FREE_PTR(result->resnorm); FREE_PTR(b); FREE_PTR(y);
-// #endif
-//             return -3;
-//         }
+        if (MatrixMath_Invert(A_copy, param_size) != 0) {
+            // 矩阵不可逆
+            if (debug) {
+                printf("Optimizer_LM: Matrix inversion failed at iteration %d\n", iter);
+            }
+#if !OPT_LM_FORBIDDEN_DYNAMIC_ALLOCATION
+            FREE_PTR(dx_new); FREE_PTR(A_copy); FREE_PTR(A); FREE_PTR(JT); FREE_PTR(L); FREE_PTR(JTr);
+            FREE_PTR(x); FREE_PTR(r); FREE_PTR(J); FREE_PTR(dx); FREE_PTR(x_new); FREE_PTR(r_new);
+            FREE_PTR(result->x_hat); FREE_PTR(result->resnorm); FREE_PTR(b); FREE_PTR(y);
+#endif
+            return -3;
+        }
         
-//         // dx = A^(-1) * b
-//         MatrixMath_Multiply(A_copy, dx, param_size, param_size, 1, dx_new);
-//         memcpy(dx, dx_new, param_size * sizeof(opt_scalar_t));
+        // dx = A^(-1) * b
+        MatrixMath_Multiply(A_copy, b, param_size, param_size, 1, dx_new);
+        memcpy(dx, dx_new, param_size * sizeof(opt_scalar_t));
 
+        #ifdef SOC_6678
         // Cholesky 分解
         DSPF_dp_cholesky(0, param_size, A, L);
         // Cholesky 解线性方程 A*dx = b; L*LT*dx=b; L*y=b;
         DSPF_dp_cholesky_solver(param_size, L, y, b, dx);
+        #endif
         
         // 调试输出
         if (debug) {
@@ -305,7 +318,7 @@ int Optimizer_LM(
         }
         
         // 收敛判断2: 参数变化足够小
-        if (opt_vector_norm(dx, param_size) < TolX || opt_vector_norm(r, residual_size) < TolR) {
+        if (/*opt_vector_norm(dx, param_size) < TolX && */opt_vector_norm(r, residual_size) < TolR) {
             if (opt_vector_norm(r, residual_size) > TolR) {
                 if (debug) {
                     printf("[Optimizer_LM] LM failed: Residual(%.3e) norm cannot converge.\n", 
@@ -331,7 +344,6 @@ int Optimizer_LM(
         }
         
         // 尝试新参数
-        int i;
         for (i = 0; i < param_size; i++) {
             x_new[i] = x[i] + dx[i];
         }
@@ -341,19 +353,22 @@ int Optimizer_LM(
         
         // 计算rho
         opt_scalar_t numerator = cost - cost_new;
-        opt_scalar_t denominator = 0.5 * opt_vector_dot(dx, dx, param_size) * lambda - 
-                                  0.5 * opt_vector_dot(dx, JTr, param_size);
-        // opt_scalar_t rho = (denominator > OPT_EPS) ? (numerator / denominator) : 0.0;
+        opt_scalar_t Jdx[residual_size];
+        MatrixMath_Multiply(J, dx, residual_size, param_size, 1, Jdx); // J*dx
+        opt_scalar_t JTr_dx = opt_vector_dot(r, Jdx, residual_size);
+        opt_scalar_t denominator = - JTr_dx - 0.5 * opt_vector_dot(Jdx, Jdx, residual_size);
+        // opt_scalar_t denominator = 0.5 * (opt_vector_dot(r, r, residual_size) * lambda - opt_vector_dot(dx, JTr, param_size));
+        // opt_scalar_t rho = (fabs(denominator) > OPT_EPS) ? (numerator / denominator) : 0.0;
         opt_scalar_t rho = numerator / denominator;
         
         // 接受或拒绝更新
-        if (rho > 0) {
+        if (rho > 1e-4) {
             // 接受更新
             memcpy(x, x_new, param_size * sizeof(opt_scalar_t));
-            lambda = lambda * ((2 * rho - 1) > 0 ? 
-                              opt_fmax(1.0/3.0, 1.0 - opt_pow(2 * rho - 1, 3)) : 1.0/3.0);
+            lambda = lambda * ((2 * rho - 1) > 0 ? opt_fmax(1.0/3.0, 1.0 - opt_pow(2 * rho - 1, 3)) : 1.0/3.0);
+            // lambda = lambda / nu;
             nu = 2.0;
-        } else {
+        } else{
             // 拒绝更新
             lambda = lambda * nu;
             nu = 2.0 * nu;
@@ -395,5 +410,5 @@ int Optimizer_LM(
 #if !OPT_LM_FORBIDDEN_DYNAMIC_ALLOCATION
     FREE_PTR(x); FREE_PTR(r); FREE_PTR(J); FREE_PTR(dx); FREE_PTR(x_new); FREE_PTR(r_new);
 #endif
-    return 0; // 达到最大迭代次数
+    return -5; // 达到最大迭代次数
 }

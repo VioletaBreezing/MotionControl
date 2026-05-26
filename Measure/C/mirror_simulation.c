@@ -11,16 +11,17 @@
 #define max(a,b) (((a)>(b))?(a):(b))
 #endif
 
-#ifdef _SIMULAE_IN_X86_
+#ifdef _SIMULAE_IN_X86_ 
 
-#include "Measure/C/mirror_reflection_simulation_2RS_myLM.h"
+#include "mirror_reflection_simulation_2RS_myLM.h"
 #include <windows.h>
 #include <time.h>
 
 int main() {
     printf("=== Testing Mirror Reflection Pose Optimization with Real Initial Guess ===\n");
 
-    srand((unsigned int)time(NULL));
+    // srand((unsigned int)time(NULL));
+    srand(0);
     
     // 设置真实位姿参数（与MATLAB一致）
     lie_scalar_t theta_x = 0.0;           // 绕X轴旋转（设为0）
@@ -117,11 +118,7 @@ int main() {
     printf("h1 = %.10f m\n", h_meas[1]);
     printf("h2 = %.10f m\n", h_meas[2]);
     
-    // 使用MATLAB中的初始猜测（故意设错，但不是零）
-    lie_scalar_t xi0[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0}; // [tx, ty, tz, phix, phiy, phiz]
-    
-    printf("\nInitial guess: [%.6f, %.6f, %.6f, %.6f, %.6f, %.6f]\n",
-           xi0[0], xi0[1], xi0[2], xi0[3], xi0[4], xi0[5]);
+    lie_scalar_t xi0[6];
     
     // 执行优化并计时 (使用高精度计时器)
     lie_scalar_t xi_result[6];
@@ -132,13 +129,14 @@ int main() {
     QueryPerformanceFrequency(&frequency);
     QueryPerformanceCounter(&start_time);
 
-    int times_cnt = 20000;
+    int times_cnt = 100000;
     int status = 0;
     lie_scalar_t T[16];
     lie_scalar_t R_est[9];
     lie_scalar_t t_est[3];
     lie_scalar_t max_trans_error[3] = {0.0, 0.0, 0.0};
     lie_scalar_t max_rot_error[3] = {0.0, 0.0, 0.0};
+    int max_iter = -1;
     int i;
     for(i = 0; i < times_cnt && status == 0; i++)
     {
@@ -162,21 +160,15 @@ int main() {
         lie_scalar_t euler_angle_init[3] = {0.0, 0.0, theta_z};
         euler_angle_init[2] += ((lie_scalar_t)rand() / RAND_MAX * 2.0 - 1.0) * 1e-5;
         lie_scalar_t trans_init[3] = {tx, ty, tz};
-        trans_init[0] += ((lie_scalar_t)rand() / RAND_MAX * 2.0 - 1.0) * 1e-5;
-        trans_init[1] += ((lie_scalar_t)rand() / RAND_MAX * 2.0 - 1.0) * 1e-5;
+        trans_init[0] += ((lie_scalar_t)rand() / RAND_MAX * 2.0 - 1.0) * 1e-4;
+        trans_init[1] += ((lie_scalar_t)rand() / RAND_MAX * 2.0 - 1.0) * 1e-4;
 
-        lie_scalar_t R_init[9];
-        euler_to_SO3(euler_angle_init, R_init);
-
-        T[0] = R_init[0]; T[1] = R_init[1]; T[2] = R_init[2];  T[3] = trans_init[0];
-        T[4] = R_init[3]; T[5] = R_init[4]; T[6] = R_init[5];  T[7] = trans_init[1];
-        T[8] = R_init[6]; T[9] = R_init[7]; T[10] = R_init[8]; T[11] = trans_init[2];
-        T[12] = 0;        T[13] = 0;        T[14] = 0;         T[15] = 1;
-
-        SE3_to_se3(T, xi0); // 将真实位姿转换为se3格式，作为初始猜测
+        xi0[0] = trans_init[0]; xi0[1] = trans_init[1]; xi0[2] = trans_init[2];
+        xi0[3] = euler_angle_init[0]; xi0[4] = euler_angle_init[1]; xi0[5] = euler_angle_init[2];
 
         QueryPerformanceCounter(&start_time_iter);
 
+        int act_iter = 0;
         status = mirror_reflection_pose_optimization(
             rays,
             h_meas,
@@ -184,9 +176,10 @@ int main() {
             xi0,
             xi_result,
             final_residual,
-            100,     // max_iter
-            1e-11,  // tol_x (更严格的收敛条件)
-            1e-11   // tol_r (更严格的收敛条件)
+            50,     // max_iter
+            1e-10,  // tol_x (更严格的收敛条件)
+            1e-10,   // tol_r (更严格的收敛条件)
+            &act_iter
         );
 
         se3_to_SE3(xi_result, T);
@@ -208,6 +201,8 @@ int main() {
         max_rot_error[0] = max(max_rot_error[0], fabs(xi_result[3] - theta_x));
         max_rot_error[1] = max(max_rot_error[1], fabs(xi_result[4] - theta_y));
         max_rot_error[2] = max(max_rot_error[2], fabs(xi_result[5] - theta_z));
+
+        max_iter = max(max_iter, act_iter);
     }
     
     QueryPerformanceCounter(&end_time);
@@ -241,6 +236,8 @@ int main() {
         printf("\nFinal residuals (nm):   [%.2e, %.2e, %.2e]\n", 
                 final_residual[0]*1e9, final_residual[1]*1e9, final_residual[2]*1e9);
 
+        printf("Maximum Iterations: %d\n", max_iter);
+
         // 检查是否成功收敛到真实值
         lie_scalar_t trans_error_norm = vector_norm(trans_error, 3);
         lie_scalar_t rot_error_norm = vector_norm(rot_error, 3);
@@ -256,7 +253,7 @@ int main() {
         printf("\n⏱️  Execution time: %.6f us\n", cpu_time_used * 1e6);
         printf("Maximum execution time: %.6f us\n", max_exec_time * 1e6);
     } else {
-        printf("❌ Optimization failed with status: %d\n", status);
+        printf("❌ Optimization failed with status: %d at iteration %d\n", status, i);
         printf("Execution time: %.6f seconds\n", cpu_time_used);
         printf("Status codes:\n");
         printf("  0 = Success\n");
@@ -264,7 +261,47 @@ int main() {
         printf(" -2 = Memory allocation failed\n");
         printf(" -3 = Matrix inversion failed\n");
         printf(" -4 = Lambda too large\n");
+        printf(" -5 = time out\n");
         printf("\n⏱️  Execution time: %.6f us\n", cpu_time_used * 1e6);
+        // 打印失败时的真实位姿和测量值，帮助调试
+        printf("True pose:\n");
+        printf("Translation (mm): [%.7f, %.7f, %.7f]\n", tx * 1e3, ty * 1e3, tz * 1e3);
+        printf("Rotation (mrad):  [%.7f, %.7f, %.7f]\n", theta_x * 1e3, theta_y * 1e3, theta_z * 1e3);
+        printf("Measurements:\n");
+        printf("h0 = %.10f m\n", h_meas[0]);
+        printf("h1 = %.10f m\n", h_meas[1]);
+        printf("h2 = %.10f m\n", h_meas[2]);
+        printf("True Transformation:\n");
+        printf("[%.9f, %.9f, %.9f, %.9f]\n", R_true[0], R_true[1], R_true[2], tx);
+        printf("[%.9f, %.9f, %.9f, %.9f]\n", R_true[3], R_true[4], R_true[5], ty);
+        printf("[%.9f, %.9f, %.9f, %.9f]\n", R_true[6], R_true[7], R_true[8], tz);
+        printf("[%.9f, %.9f, %.9f, %.9f]\n", T[12],     T[13],     T[14],     T[15]);
+
+        printf("Estimated pose:\n");
+        printf("Translation (mm): [%.7f, %.7f, %.7f]\n", t_est[0] * 1e3, t_est[1] * 1e3, t_est[2] * 1e3);
+        printf("Rotation (mrad):  [%.7f, %.7f, %.7f]\n", xi_result[3] * 1e3, xi_result[4] * 1e3, xi_result[5] * 1e3);
+        
+        printf("\nTrue pose:\n");
+        printf("Translation (mm): [%.7f, %.7f, %.7f]\n", tx * 1e3, ty * 1e3, tz * 1e3);
+        printf("Rotation (mrad):  [%.7f, %.7f, %.7f]\n", theta_x * 1e3, theta_y * 1e3, theta_z * 1e3);
+        
+        // 计算误差
+        lie_scalar_t trans_error[3] = {t_est[0] - tx, t_est[1] - ty, t_est[2] - tz};
+        lie_scalar_t rot_error[3] = {xi_result[3] - theta_x, xi_result[4] - theta_y, xi_result[5] - theta_z};
+        
+        printf("\nErrors:\n");
+        printf("Translation error (nm): [%.2e, %.2e, %.2e]\n", 
+               trans_error[0]*1e9, trans_error[1]*1e9, trans_error[2]*1e9);
+        printf("Rotation error (nrad):  [%.2e, %.2e, %.2e]\n", 
+               rot_error[0]*1e9, rot_error[1]*1e9, rot_error[2]*1e9);
+
+        printf("\nMaximum translation error (nm): [%.3e, %.3e, %.3e]\n", 
+               max_trans_error[0]*1e9, max_trans_error[1]*1e9, max_trans_error[2]*1e9);
+        printf("Maximum rotation error (nrad):  [%.3e, %.3e, %.3e]\n", 
+               max_rot_error[0]*1e9, max_rot_error[1]*1e9, max_rot_error[2]*1e9);
+        
+        printf("\nFinal residuals (nm):   [%.2e, %.2e, %.2e]\n", 
+                final_residual[0]*1e9, final_residual[1]*1e9, final_residual[2]*1e9);
     }
     
     return 0;

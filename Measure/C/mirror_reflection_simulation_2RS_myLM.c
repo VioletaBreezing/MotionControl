@@ -196,7 +196,8 @@ int mirror_reflection_pose_optimization(
     lie_scalar_t* final_residual,   // 最终残差
     int max_iter,
     lie_scalar_t tol_x,
-    lie_scalar_t tol_r) {
+    lie_scalar_t tol_r,
+    int *iters) {
     
     // 准备优化参数
     mirror_optimization_args_t opt_args;
@@ -226,6 +227,8 @@ int mirror_reflection_pose_optimization(
         0,          // debug: 关闭
         &result
     );
+
+    *iters = result.iter;
     
     if (status == 0) {
         // 成功优化

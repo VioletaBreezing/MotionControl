@@ -1,7 +1,9 @@
 #ifndef MatrixMath_h
 #define MatrixMath_h
 
+#ifdef SOC_6678
 #include "ti/dsplib/dsplib.h"
+#endif
 
 #if defined(MATRIXMATH_USE_FLOAT) && MATRIXMATH_USE_FLOAT == 1
 typedef float mtx_type;

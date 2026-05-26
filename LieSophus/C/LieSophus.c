@@ -1,9 +1,12 @@
 #include "LieSophus.h"
-#include "ti/dsplib/dsplib.h"
-#include "ti/mathlib/mathlib.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#ifdef SOC_6678
+#include "ti/dsplib/dsplib.h"
+#include "ti/mathlib/mathlib.h"
+#endif
 
 // 如果 M_PI 仍未定义，则手动定义
 #ifndef M_PI
@@ -110,7 +113,7 @@ void SO3_to_so3(const lie_scalar_t* R, lie_scalar_t* phi) {
     cos_theta = (cos_theta > 1.0) ? 1.0 : ((cos_theta < -1.0) ? -1.0 : cos_theta);
     lie_scalar_t theta = lie_acos(cos_theta);
 
-    if (lie_fabs(theta) < 1e-10) {
+    if (lie_fabs(theta) < 1e-13) {
         // 情况1: 无旋转 → phi = [0;0;0]
         phi[0] = 0.0;
         phi[1] = 0.0;
@@ -140,7 +143,7 @@ void SO3_to_so3(const lie_scalar_t* R, lie_scalar_t* phi) {
         n[2] = A[6 + idx];
         
         lie_scalar_t norm_n = vector_norm(n, 3);
-        if (norm_n > 1e-10) {
+        if (norm_n > 1e-13) {
             n[0] /= norm_n;
             n[1] /= norm_n;
             n[2] /= norm_n;
@@ -164,7 +167,7 @@ void SO3_to_so3(const lie_scalar_t* R, lie_scalar_t* phi) {
 void so3_to_SO3(const lie_scalar_t* phi, lie_scalar_t* R) {
     lie_scalar_t theta = vector_norm(phi, 3);
     
-    if (lie_fabs(theta) < 1e-8) {
+    if (lie_fabs(theta) < 1e-13) {
         matrix_eye3(R);
     } else {
         lie_scalar_t k[3];
@@ -198,7 +201,7 @@ void so3_to_SO3(const lie_scalar_t* phi, lie_scalar_t* R) {
 void J_left(const lie_scalar_t* phi, lie_scalar_t* J) {
     lie_scalar_t theta = vector_norm(phi, 3);
     
-    if (lie_fabs(theta) < 1e-10) {
+    if (lie_fabs(theta) < 1e-13) {
         matrix_eye3(J);
     } else {
         lie_scalar_t a[3];
@@ -262,9 +265,9 @@ void SE3_to_se3(const lie_scalar_t* T, lie_scalar_t* xi) {
         xi[2] = J_copy[6] * t[0] + J_copy[7] * t[1] + J_copy[8] * t[2];
     } else {
         // J不可逆，使用最小二乘解或其他方法
-        xi[0] = 0.0;
-        xi[1] = 0.0;
-        xi[2] = 0.0;
+        xi[0] = t[0];
+        xi[1] = t[1];
+        xi[2] = t[2];
     }
     
     // 设置phi部分

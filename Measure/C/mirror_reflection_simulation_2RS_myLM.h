@@ -50,7 +50,8 @@ int mirror_reflection_pose_optimization(
     lie_scalar_t* final_residual,   // 最终残差
     int max_iter,
     lie_scalar_t tol_x,
-    lie_scalar_t tol_r
+    lie_scalar_t tol_r,
+    int* iters                      // 输出实际迭代次数
 );
 
 #ifdef __cplusplus

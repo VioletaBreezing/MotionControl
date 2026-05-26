@@ -235,8 +235,8 @@ int Optimizer_LM(
             printf("[Optimizer_LM] Iter %2d: cost = %.3e\n", iter, cost);
         }
         
-        // 收敛判断1: 残差足够小
-        if (opt_vector_norm(r, residual_size) < TolR) {
+        // 收敛判断
+        if (pt_vector_norm(dx, param_size) < TolX && opt_vector_norm(r, residual_size) < TolR) {
             if (debug) {
                 printf("[Optimizer_LM]: Converged by residual norm.\n");
             }
@@ -254,30 +254,30 @@ int Optimizer_LM(
             return 0; // 成功收敛
         }
         
-        // 收敛判断2: 参数变化足够小
-        if (opt_vector_norm(dx, param_size) < TolX) {
-            if (opt_vector_norm(r, residual_size) > TolR) {
-                if (debug) {
-                    printf("[Optimizer_LM] LM failed: Residual(%.3e) norm cannot converge.\n", 
-                           opt_vector_norm(r, residual_size));
-                }
-            }
-            if (debug) {
-                printf("[Optimizer_LM]: Ended iteration by X change.\n");
-            }
-            result->converged = 0;
-            result->iter = iter;
-            result->final_cost = cost;
-            memcpy(result->x_hat, x, param_size * sizeof(opt_scalar_t));
-            memcpy(result->resnorm, r, residual_size * sizeof(opt_scalar_t));
+//         // 收敛判断2: 参数变化足够小
+//         if (opt_vector_norm(dx, param_size) < TolX) {
+//             if (opt_vector_norm(r, residual_size) > TolR) {
+//                 if (debug) {
+//                     printf("[Optimizer_LM] LM failed: Residual(%.3e) norm cannot converge.\n", 
+//                            opt_vector_norm(r, residual_size));
+//                 }
+//             }
+//             if (debug) {
+//                 printf("[Optimizer_LM]: Ended iteration by X change.\n");
+//             }
+//             result->converged = 0;
+//             result->iter = iter;
+//             result->final_cost = cost;
+//             memcpy(result->x_hat, x, param_size * sizeof(opt_scalar_t));
+//             memcpy(result->resnorm, r, residual_size * sizeof(opt_scalar_t));
             
-            // 清理内存
-#if !OPT_LM_FORBIDDEN_DYNAMIC_ALLOCATION
-            FREE_PTR(dx_new); FREE_PTR(A_copy); FREE_PTR(A); FREE_PTR(JT); FREE_PTR(JTJ); FREE_PTR(JTr);
-            FREE_PTR(x); FREE_PTR(r); FREE_PTR(J); FREE_PTR(dx); FREE_PTR(x_new); FREE_PTR(r_new);
-#endif
-            return 0; // 正常结束但未完全收敛
-        }
+//             // 清理内存
+// #if !OPT_LM_FORBIDDEN_DYNAMIC_ALLOCATION
+//             FREE_PTR(dx_new); FREE_PTR(A_copy); FREE_PTR(A); FREE_PTR(JT); FREE_PTR(JTJ); FREE_PTR(JTr);
+//             FREE_PTR(x); FREE_PTR(r); FREE_PTR(J); FREE_PTR(dx); FREE_PTR(x_new); FREE_PTR(r_new);
+// #endif
+//             return 0; // 正常结束但未完全收敛
+//         }
         
         // 尝试新参数
         for (i = 0; i < param_size; i++) {

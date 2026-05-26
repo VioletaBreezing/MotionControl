@@ -283,3 +283,22 @@ void se3_to_SE3(const lie_scalar_t* xi, lie_scalar_t* T) {
     T[8] = R[6]; T[9] = R[7]; T[10] = R[8]; T[11] = t[2];
     T[12] = 0.0; T[13] = 0.0; T[14] = 0.0;  T[15] = 1.0;
 }
+
+void euler_to_SO3(const lie_scalar_t* euler, lie_scalar_t* R) {
+    lie_scalar_t cx = lie_cos(euler[0]);
+    lie_scalar_t sx = lie_sin(euler[0]);
+    lie_scalar_t cy = lie_cos(euler[1]);
+    lie_scalar_t sy = lie_sin(euler[1]);
+    lie_scalar_t cz = lie_cos(euler[2]);
+    lie_scalar_t sz = lie_sin(euler[2]);
+
+    R[0] = cz * cy;
+    R[1] = cz * sy * sx - sz * cx;
+    R[2] = cz * sy * cx + sz * sx;
+    R[3] = sz * cy;
+    R[4] = sz * sy * sx + cz * cx;
+    R[5] = sz * sy * cx - cz * sx;
+    R[6] = -sy;
+    R[7] = sx * cy;
+    R[8] = cx * cy;
+}

@@ -127,10 +127,8 @@ int main() {
     lie_scalar_t t_est[3];
     lie_scalar_t max_trans_error[3] = {0.0, 0.0, 0.0};
     lie_scalar_t max_rot_error[3] = {0.0, 0.0, 0.0};
-    for(int i = 0; i < times_cnt && status == 0; i++)
+    for(int i = 0; i < times_cnt; i++)
     {
-        QueryPerformanceCounter(&start_time_iter);
-
         theta_z = (lie_scalar_t)rand() / RAND_MAX * 2.0 - 1.0;
         theta_z *= 2e-3; // 旋转范围在±1 mrad内
         
@@ -139,34 +137,32 @@ int main() {
         tx *= 13e-2; // 平移范围在±1 mm内
         ty *= 13e-2;
 
-        h_meas[0] = cal_light_dis(R_true, t_true, a0, u0, p0_B, n0_B);
-        h_meas[1] = cal_light_dis(R_true, t_true, a1, u1, p1_B, n1_B);
-        h_meas[2] = cal_light_dis(R_true, t_true, a2, u2, p2_B, n2_B);
+        lie_scalar_t euler_angle[3] = {theta_x, theta_y, theta_z};
+        euler_to_SO3(euler_angle, R_true);
 
-        cos_x = cos(theta_x), sin_x = sin(theta_x);
-        cos_y = cos(theta_y), sin_y = sin(theta_y);
-        cos_z = cos(theta_z), sin_z = sin(theta_z);
-        
-        Rx[0] = 1; Rx[1] = 0;     Rx[2] = 0;
-        Rx[3] = 0; Rx[4] = cos_x; Rx[5] = -sin_x;
-        Rx[6] = 0; Rx[7] = sin_x; Rx[8] = cos_x;
-
-        Ry[0] = cos_y;  Ry[1] = 0; Ry[2] = sin_y;
-        Ry[3] = 0;      Ry[4] = 1; Ry[5] = 0;
-        Ry[6] = -sin_y; Ry[7] = 0; Ry[8] = cos_y;
-
-        Rz[0] = cos_z; Rz[1] = -sin_z; Rz[2] = 0;
-        Rz[3] = sin_z; Rz[4] = cos_z;  Rz[5] = 0;
-        Rz[6] = 0;     Rz[7] = 0;      Rz[8] = 1;
-        
-        MatrixMath_Multiply(Rz, Ry, 3, 3, 3, R_temp);
-        MatrixMath_Multiply(R_temp, Rx, 3, 3, 3, R_true);
-    
         t_true[0] = tx; t_true[1] = ty; t_true[2] = tz;
 
         h_meas[0] = cal_light_dis(R_true, t_true, a0, u0, p0_B, n0_B);
         h_meas[1] = cal_light_dis(R_true, t_true, a1, u1, p1_B, n1_B);
         h_meas[2] = cal_light_dis(R_true, t_true, a2, u2, p2_B, n2_B);
+
+        lie_scalar_t euler_angle_init[3] = {0.0, 0.0, theta_z};
+        euler_angle_init[2] += ((lie_scalar_t)rand() / RAND_MAX * 2.0 - 1.0) * 1e-5;
+        lie_scalar_t trans_init[3] = {tx, ty, tz};
+        trans_init[0] += ((lie_scalar_t)rand() / RAND_MAX * 2.0 - 1.0) * 1e-5;
+        trans_init[1] += ((lie_scalar_t)rand() / RAND_MAX * 2.0 - 1.0) * 1e-5;
+
+        lie_scalar_t R_init[9];
+        euler_to_SO3(euler_angle_init, R_init);
+
+        T[0] = R_init[0]; T[1] = R_init[1]; T[2] = R_init[2];  T[3] = trans_init[0];
+        T[4] = R_init[3]; T[5] = R_init[4]; T[6] = R_init[5];  T[7] = trans_init[1];
+        T[8] = R_init[6]; T[9] = R_init[7]; T[10] = R_init[8]; T[11] = trans_init[2];
+        T[12] = 0;        T[13] = 0;        T[14] = 0;         T[15] = 1;
+
+        SE3_to_se3(T, xi0); // 将真实位姿转换为se3格式，作为初始猜测
+
+        QueryPerformanceCounter(&start_time_iter);
 
         status = mirror_reflection_pose_optimization(
             rays,
@@ -205,11 +201,6 @@ int main() {
     double cpu_time_used = (double)(end_time.QuadPart - start_time.QuadPart) / frequency.QuadPart / times_cnt;
     
     if (status == 0) {
-        // lie_scalar_t T[16];
-        // se3_to_SE3(xi_result, T);
-        // lie_scalar_t R_est[9] = {T[0], T[1], T[2], T[4], T[5], T[6], T[8], T[9], T[10]};
-        // lie_scalar_t t_est[3] = {T[3], T[7], T[11]};
-
         printf("\n✅ Optimization successful!\n");
         printf("Estimated pose:\n");
         printf("Translation (mm): [%.7f, %.7f, %.7f]\n", t_est[0] * 1e3, t_est[1] * 1e3, t_est[2] * 1e3);
@@ -236,10 +227,10 @@ int main() {
         
         printf("\nFinal residuals (nm):   [%.2e, %.2e, %.2e]\n", 
                 final_residual[0]*1e9, final_residual[1]*1e9, final_residual[2]*1e9);
-        
+
         // 检查是否成功收敛到真实值
-        lie_scalar_t trans_error_norm = sqrt(trans_error[0]*trans_error[0] + trans_error[1]*trans_error[1] + trans_error[2]*trans_error[2]);
-        lie_scalar_t rot_error_norm = sqrt(rot_error[0]*rot_error[0] + rot_error[1]*rot_error[1] + rot_error[2]*rot_error[2]);
+        lie_scalar_t trans_error_norm = vector_norm(trans_error, 3);
+        lie_scalar_t rot_error_norm = vector_norm(rot_error, 3);
         
         if (trans_error_norm < 1e-9 && rot_error_norm < 1e-8) {
             printf("\n🎉 Perfect convergence achieved!\n");

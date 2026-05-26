@@ -1,3 +1,5 @@
+#ifdef _SIMULAE_IN_X86_
+
 #include "Measure/C/mirror_reflection_simulation_2RS_myLM.h"
 #include <stdio.h>
 #include <math.h>
@@ -127,7 +129,8 @@ int main() {
     lie_scalar_t t_est[3];
     lie_scalar_t max_trans_error[3] = {0.0, 0.0, 0.0};
     lie_scalar_t max_rot_error[3] = {0.0, 0.0, 0.0};
-    for(int i = 0; i < times_cnt && status == 0; i++)
+    int i;
+    for(i = 0; i < times_cnt && status == 0; i++)
     {
         QueryPerformanceCounter(&start_time_iter);
 
@@ -265,3 +268,5 @@ int main() {
     
     return 0;
 }
+
+#endif

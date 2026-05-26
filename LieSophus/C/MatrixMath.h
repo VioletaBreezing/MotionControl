@@ -1,6 +1,8 @@
 #ifndef MatrixMath_h
 #define MatrixMath_h
 
+#include "ti/dsplib/dsplib.h"
+
 #if defined(MATRIXMATH_USE_FLOAT) && MATRIXMATH_USE_FLOAT == 1
 typedef float mtx_type;
 #define mtx_sin sinf

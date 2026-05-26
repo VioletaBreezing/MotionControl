@@ -27,10 +27,25 @@
 #define lie_fabs fabs
 #endif
 
+#ifdef SOC_C6678
+#pragma CODE_SECTION(vector_norm, ".sa_code")
+#pragma CODE_SECTION(vector_normalize, ".sa_code")
+#pragma CODE_SECTION(matrix_eye, ".sa_code")
+#pragma CODE_SECTION(matrix_add_scaled, ".sa_code")
+#pragma CODE_SECTION(outer_product, ".sa_code")
+#pragma CODE_SECTION(skew, ".sa_code")
+#pragma CODE_SECTION(SO3_to_so3, ".sa_code")
+#pragma CODE_SECTION(so3_to_SO3, ".sa_code")
+#pragma CODE_SECTION(J_left, ".sa_code")
+#pragma CODE_SECTION(SE3_to_se3, ".sa_code")
+#pragma CODE_SECTION(se3_to_SE3, ".sa_code")
+#endif
+
 // 辅助函数实现
 lie_scalar_t vector_norm(const lie_scalar_t* v, int n) {
     lie_scalar_t sum = 0.0;
-    for (int i = 0; i < n; i++) {
+    int i;
+    for (i = 0; i < n; i++) {
         sum += v[i] * v[i];
     }
     return lie_sqrt(sum);
@@ -38,36 +53,40 @@ lie_scalar_t vector_norm(const lie_scalar_t* v, int n) {
 
 void vector_normalize(const lie_scalar_t* v, int n, lie_scalar_t* result) {
     lie_scalar_t norm = vector_norm(v, n);
+    int i;
     if (norm > 1e-10) {
-        for (int i = 0; i < n; i++) {
+        for (i = 0; i < n; i++) {
             result[i] = v[i] / norm;
         }
     } else {
-        for (int i = 0; i < n; i++) {
+        for (i = 0; i < n; i++) {
             result[i] = 0.0;
         }
     }
 }
 
 void matrix_eye(lie_scalar_t* A, int n) {
-    for (int i = 0; i < n; i++) {
-        for (int j = 0; j < n; j++) {
+    int i, j;
+    for (i = 0; i < n; i++) {
+        for (j = 0; j < n; j++) {
             A[i * n + j] = (i == j) ? 1.0 : 0.0;
         }
     }
 }
 
 void matrix_add_scaled(lie_scalar_t* A, lie_scalar_t* B, lie_scalar_t alpha, int m, int n, lie_scalar_t* C) {
-    for (int i = 0; i < m; i++) {
-        for (int j = 0; j < n; j++) {
+    int i, j;
+    for (i = 0; i < m; i++) {
+        for (j = 0; j < n; j++) {
             C[i * n + j] = A[i * n + j] + alpha * B[i * n + j];
         }
     }
 }
 
 void outer_product(const lie_scalar_t* a, const lie_scalar_t* b, int m, int n, lie_scalar_t* result) {
-    for (int i = 0; i < m; i++) {
-        for (int j = 0; j < n; j++) {
+    int i, j;
+    for (i = 0; i < m; i++) {
+        for (j = 0; j < n; j++) {
             result[i * n + j] = a[i] * b[j];
         }
     }
@@ -162,7 +181,8 @@ void so3_to_SO3(const lie_scalar_t* phi, lie_scalar_t* R) {
         lie_scalar_t sin_t = lie_sin(theta);
         
         // R = cos(theta)*eye(3) + (1-cos(theta))*(k*k') + sin(theta)*K;
-        for (int i = 0; i < 9; i++) {
+        int i;
+        for (i = 0; i < 9; i++) {
             R[i] = cos_t * ((i % 4 == 0) ? 1.0 : 0.0) + 
                    (1.0 - cos_t) * kkT[i] + 
                    sin_t * K[i];
@@ -200,7 +220,8 @@ void J_left(const lie_scalar_t* phi, lie_scalar_t* J) {
         
         // J = sin(theta)/theta * eye(3) + (1 - sin(theta)/theta) * (a * a') + (1 - cos(theta))/theta * skew(a);
         // 直接计算每个元素，避免条件判断
-        for (int i = 0; i < 9; i++) {
+        int i;
+        for (i = 0; i < 9; i++) {
             lie_scalar_t eye_val = (i == 0 || i == 4 || i == 8) ? 1.0 : 0.0;
             J[i] = coeff1 * eye_val + coeff2 * A_outer[i] + coeff3 * skew_a[i];
         }

@@ -39,10 +39,17 @@ static opt_scalar_t A_copy_buffer[OPT_LM_MAX_PARAM_SIZE * OPT_LM_MAX_PARAM_SIZE]
 static opt_scalar_t dx_new_buffer[OPT_LM_MAX_PARAM_SIZE];
 #endif
 
+#ifdef SOC_C6678
+#pragma CODE_SECTION(opt_vector_norm, ".sa_code")
+#pragma CODE_SECTION(opt_vector_dot, ".sa_code")
+#pragma CODE_SECTION(Optimizer_LM, ".sa_code")
+#endif
+
 // 辅助函数实现（向量操作保留，因为MatrixMath没有提供）
 opt_scalar_t opt_vector_norm(const opt_scalar_t* v, int n) {
     opt_scalar_t sum = 0.0;
-    for (int i = 0; i < n; i++) {
+    int i;
+    for (i = 0; i < n; i++) {
         sum += v[i] * v[i];
     }
     return opt_sqrt(sum);
@@ -50,7 +57,8 @@ opt_scalar_t opt_vector_norm(const opt_scalar_t* v, int n) {
 
 opt_scalar_t opt_vector_dot(const opt_scalar_t* a, const opt_scalar_t* b, int n) {
     opt_scalar_t sum = 0.0;
-    for (int i = 0; i < n; i++) {
+    int i;
+    for (i = 0; i < n; i++) {
         sum += a[i] * b[i];
     }
     return sum;
@@ -144,7 +152,8 @@ int Optimizer_LM(
     result->final_cost = 0.0;
 
     // 主迭代循环
-    for (int iter = 1; iter <= MaxIter; iter++) {
+    int iter;
+    for (iter = 1; iter <= MaxIter; iter++) {
         // 计算残差和雅可比矩阵
         ResFcn(x, Rargs, r);
         JacobiFcn(x, Jargs, J);
@@ -190,12 +199,13 @@ int Optimizer_LM(
         // A = JTJ + lambda * I
         memcpy(A, JTJ, param_size * param_size * sizeof(opt_scalar_t));
         // 添加lambda到对角线
-        for (int i = 0; i < param_size; i++) {
+        int i;
+        for (i = 0; i < param_size; i++) {
             A[i * param_size + i] += lambda;
         }
         
         // b = -JTr
-        for (int i = 0; i < param_size; i++) {
+        for (i = 0; i < param_size; i++) {
             dx[i] = -JTr[i];
         }
         
@@ -270,7 +280,7 @@ int Optimizer_LM(
         }
         
         // 尝试新参数
-        for (int i = 0; i < param_size; i++) {
+        for (i = 0; i < param_size; i++) {
             x_new[i] = x[i] + dx[i];
         }
         

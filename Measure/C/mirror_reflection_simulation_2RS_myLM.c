@@ -13,6 +13,15 @@
 #define lie_sqrt sqrt
 #endif
 
+#ifdef SOC_C6678
+#pragma CODE_SECTION(cal_light_dis, ".sa_code")
+#pragma CODE_SECTION(skew_matrix, ".sa_code")
+#pragma CODE_SECTION(calc_jacobian, ".sa_code")
+#pragma CODE_SECTION(Get_RS2_IFM_MS_ResFcn, ".sa_code")
+#pragma CODE_SECTION(Get_RS2_IFM_MS_Jacobian, ".sa_code")
+#pragma CODE_SECTION(mirror_reflection_pose_optimization, ".sa_code")
+#endif
+
 // 计算单条光路的光程
 lie_scalar_t cal_light_dis(const lie_scalar_t* R, const lie_scalar_t* t, 
                           const lie_scalar_t* a, const lie_scalar_t* u,
@@ -86,7 +95,8 @@ void calc_jacobian(const lie_scalar_t* R, const lie_scalar_t* t,
     lie_scalar_t denom = 2.0 * beta_sq - 1.0;
     if (lie_fabs(denom) < 1e-12) {
         // 初始化为0
-        for (int i = 0; i < 6; i++) {
+        int i;
+        for (i = 0; i < 6; i++) {
             jac[i] = 0.0;
         }
         return;
@@ -136,7 +146,8 @@ void Get_RS2_IFM_MS_ResFcn(const opt_scalar_t* xi, void* args, opt_scalar_t* res
     lie_scalar_t t[3] = {T[3], T[7], T[11]};
     
     // 计算每条光路的预测光程
-    for (int i = 0; i < num_rays; i++) {
+    int i;
+    for (i = 0; i < num_rays; i++) {
         lie_scalar_t h_pred = cal_light_dis(R, t, 
                                           opt_args->rays[i].a, opt_args->rays[i].u,
                                           opt_args->rays[i].p_B, opt_args->rays[i].n_B);
@@ -157,7 +168,8 @@ void Get_RS2_IFM_MS_Jacobian(const opt_scalar_t* xi, void* args, opt_scalar_t* j
     lie_scalar_t t[3] = {T[3], T[7], T[11]};
     
     // 计算每条光路的雅可比
-    for (int i = 0; i < num_rays; i++) {
+    int i;
+    for (i = 0; i < num_rays; i++) {
         lie_scalar_t jac_6d[6];
         calc_jacobian(R, t,
                      opt_args->rays[i].a, opt_args->rays[i].u,

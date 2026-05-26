@@ -20,6 +20,16 @@
 static mtx_type buffer[MAX_MATRIX_SIZE * MAX_MATRIX_SIZE];
 #endif
 
+#ifdef SOC_C6678
+#pragma CODE_SECTION(MatrixMath_Copy, ".sa_code")
+#pragma CODE_SECTION(MatrixMath_Multiply, ".sa_code")
+#pragma CODE_SECTION(MatrixMath_Add, ".sa_code")
+#pragma CODE_SECTION(MatrixMath_Subtract, ".sa_code")
+#pragma CODE_SECTION(MatrixMath_Transpose, ".sa_code")
+#pragma CODE_SECTION(MatrixMath_Scale, ".sa_code")
+#pragma CODE_SECTION(MatrixMath_Invert, ".sa_code")
+#endif
+
 void MatrixMath_Print(mtx_type* A, int m, int n, const char* label)
 {
     int i, j;

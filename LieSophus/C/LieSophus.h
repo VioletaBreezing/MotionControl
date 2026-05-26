@@ -25,6 +25,7 @@ void so3_to_SO3(const lie_scalar_t* phi, lie_scalar_t* R);
 void J_left(const lie_scalar_t* phi, lie_scalar_t* J);
 void SE3_to_se3(const lie_scalar_t* T, lie_scalar_t* xi);
 void se3_to_SE3(const lie_scalar_t* xi, lie_scalar_t* T);
+void euler_to_SO3(const lie_scalar_t* euler, lie_scalar_t* R);
 
 // 辅助函数
 lie_scalar_t vector_norm(const lie_scalar_t* v, int n);

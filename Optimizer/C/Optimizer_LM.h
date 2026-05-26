@@ -19,10 +19,10 @@ typedef double opt_scalar_t;
 // 静态内存模式下的最大尺寸定义
 #if OPT_LM_FORBIDDEN_DYNAMIC_ALLOCATION
 #ifndef OPT_LM_MAX_PARAM_SIZE
-#define OPT_LM_MAX_PARAM_SIZE 20
+#define OPT_LM_MAX_PARAM_SIZE 8
 #endif
 #ifndef OPT_LM_MAX_RESIDUAL_SIZE
-#define OPT_LM_MAX_RESIDUAL_SIZE 100
+#define OPT_LM_MAX_RESIDUAL_SIZE 16
 #endif
 #endif
 

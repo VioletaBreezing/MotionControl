@@ -29,7 +29,6 @@ void se3_to_SE3(const lie_scalar_t* xi, lie_scalar_t* T);
 // 辅助函数
 lie_scalar_t vector_norm(const lie_scalar_t* v, int n);
 void vector_normalize(const lie_scalar_t* v, int n, lie_scalar_t* result);
-void matrix_eye(lie_scalar_t* A, int n);
 void matrix_add_scaled(lie_scalar_t* A, lie_scalar_t* B, lie_scalar_t alpha, int m, int n, lie_scalar_t* C);
 void outer_product(const lie_scalar_t* a, const lie_scalar_t* b, int m, int n, lie_scalar_t* result);
 

@@ -1,10 +1,17 @@
 #include "Optimizer_LM.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
 #include <string.h>
 
-// 数学函数适配（根据精度宏自动选择）
+// #ifdef SOC_C6678
+// #include <ti/dsplib/dsplib.h>
+// #ifdef LIE_SOPHUS_USE_FLOAT
+
+// #else
+// #endif
+
+// #else
+#include <math.h>
 #ifdef LIE_SOPHUS_USE_FLOAT
 #define opt_sin sinf
 #define opt_cos cosf
@@ -20,24 +27,64 @@
 #define opt_fabs fabs
 #define opt_pow pow
 #define opt_fmax fmax
-#define OPT_EPS 1e-12
+#define OPT_EPS 1e-14
 #endif
+// #endif
+
+#include <ti/dsplib/dsplib.h>
 
 // 静态内存缓冲区（仅在禁用动态分配时使用）
 #if OPT_LM_FORBIDDEN_DYNAMIC_ALLOCATION
+#pragma DATA_ALIGN(x_buffer, 8)
 static opt_scalar_t x_buffer[OPT_LM_MAX_PARAM_SIZE];
+
+#pragma DATA_ALIGN(r_buffer, 8)
 static opt_scalar_t r_buffer[OPT_LM_MAX_RESIDUAL_SIZE];
+
+#pragma DATA_ALIGN(J_buffer, 8)
 static opt_scalar_t J_buffer[OPT_LM_MAX_RESIDUAL_SIZE * OPT_LM_MAX_PARAM_SIZE];
+
+#pragma DATA_ALIGN(dx_buffer, 8)
 static opt_scalar_t dx_buffer[OPT_LM_MAX_PARAM_SIZE];
+
+#pragma DATA_ALIGN(x_new_buffer, 8)
 static opt_scalar_t x_new_buffer[OPT_LM_MAX_PARAM_SIZE];
+
+#pragma DATA_ALIGN(r_new_buffer, 8)
 static opt_scalar_t r_new_buffer[OPT_LM_MAX_RESIDUAL_SIZE];
+
+#pragma DATA_ALIGN(JT_buffer, 8)
 static opt_scalar_t JT_buffer[OPT_LM_MAX_PARAM_SIZE * OPT_LM_MAX_RESIDUAL_SIZE];
-static opt_scalar_t JTJ_buffer[OPT_LM_MAX_PARAM_SIZE * OPT_LM_MAX_PARAM_SIZE];
+
+#pragma DATA_ALIGN(L_buffer, 8)
+static opt_scalar_t L_buffer[OPT_LM_MAX_PARAM_SIZE * OPT_LM_MAX_PARAM_SIZE];
+
+#pragma DATA_ALIGN(JTr_buffer, 8)
 static opt_scalar_t JTr_buffer[OPT_LM_MAX_PARAM_SIZE];
+
+#pragma DATA_ALIGN(A_buffer, 8)
 static opt_scalar_t A_buffer[OPT_LM_MAX_PARAM_SIZE * OPT_LM_MAX_PARAM_SIZE];
+
+#pragma DATA_ALIGN(A_copy_buffer, 8)
 static opt_scalar_t A_copy_buffer[OPT_LM_MAX_PARAM_SIZE * OPT_LM_MAX_PARAM_SIZE];
+
+#pragma DATA_ALIGN(dx_new_buffer, 8)
 static opt_scalar_t dx_new_buffer[OPT_LM_MAX_PARAM_SIZE];
+
+#pragma DATA_ALIGN(b_buffer, 8)
+static opt_scalar_t b_buffer [OPT_LM_MAX_PARAM_SIZE];
+
+#pragma DATA_ALIGN(y_buffer, 8)
+static opt_scalar_t y_buffer [OPT_LM_MAX_PARAM_SIZE];
 #endif
+
+#pragma DATA_ALIGN(dx_new_buffer, 8)
+static opt_scalar_t EYE6[36] = {1,0,0,0,0,0,
+                                0,1,0,0,0,0,
+                                0,0,1,0,0,0,
+                                0,0,0,1,0,0,
+                                0,0,0,0,1,0,
+                                0,0,0,0,0,1};
 
 #ifdef SOC_C6678
 #pragma CODE_SECTION(opt_vector_norm, ".sa_code")
@@ -166,81 +213,109 @@ int Optimizer_LM(
         
 #if OPT_LM_FORBIDDEN_DYNAMIC_ALLOCATION
         opt_scalar_t* JT = JT_buffer;
-        opt_scalar_t* JTJ = JTJ_buffer;
+        opt_scalar_t* L = L_buffer;
         opt_scalar_t* JTr = JTr_buffer;
         opt_scalar_t* A = A_buffer;
+        opt_scalar_t* b = b_buffer;
+        opt_scalar_t* y = y_buffer;
         opt_scalar_t* A_copy = A_copy_buffer;
         opt_scalar_t* dx_new = dx_new_buffer;
 #else
         opt_scalar_t* JT = (opt_scalar_t*)malloc(param_size * residual_size * sizeof(opt_scalar_t));
-        opt_scalar_t* JTJ = (opt_scalar_t*)malloc(param_size * param_size * sizeof(opt_scalar_t));
+        opt_scalar_t* L = (opt_scalar_t*)malloc(param_size * param_size * sizeof(opt_scalar_t));
         opt_scalar_t* JTr = (opt_scalar_t*)malloc(param_size * sizeof(opt_scalar_t));
         opt_scalar_t* A = (opt_scalar_t*)malloc(param_size * param_size * sizeof(opt_scalar_t));
+        opt_scalar_t* b = (opt_scalar_t*)malloc(param_size * sizeof(opt_scalar_t));
+        opt_scalar_t* y = (opt_scalar_t*)malloc(param_size * sizeof(opt_scalar_t));
         opt_scalar_t* A_copy = (opt_scalar_t*)malloc(param_size * param_size * sizeof(opt_scalar_t));
         opt_scalar_t* dx_new = (opt_scalar_t*)malloc(param_size * sizeof(opt_scalar_t));
         
-        if (!JT || !JTJ || !JTr || !A || !A_copy || !dx_new) {
-            FREE_PTR(JT); FREE_PTR(JTJ); FREE_PTR(JTr); FREE_PTR(A); FREE_PTR(A_copy); FREE_PTR(dx_new);
+        if (!JT || !L || !JTr || !A || !A_copy || !dx_new || !b || !y) {
+            FREE_PTR(JT); FREE_PTR(L); FREE_PTR(JTr); FREE_PTR(A); FREE_PTR(A_copy); FREE_PTR(dx_new);
             FREE_PTR(x); FREE_PTR(r); FREE_PTR(J); FREE_PTR(dx); FREE_PTR(x_new); FREE_PTR(r_new);
-            FREE_PTR(result->x_hat); FREE_PTR(result->resnorm);
+            FREE_PTR(result->x_hat); FREE_PTR(result->resnorm); FREE_PTR(b); FREE_PTR(y);
             return -2;
         }
 #endif
+        memset(JT, 0x00, param_size * residual_size * sizeof(opt_scalar_t));
+        memset(L, 0x00, param_size * param_size * sizeof(opt_scalar_t));
+        memset(JTr, 0x00, param_size * sizeof(opt_scalar_t));
+        memset(A, 0x00, param_size * param_size * sizeof(opt_scalar_t));
+        memset(A_copy, 0x00, param_size * param_size * sizeof(opt_scalar_t));
+        memset(dx_new, 0x00, param_size * sizeof(opt_scalar_t));
         
         // 计算 J' (转置)
-        MatrixMath_Transpose(J, residual_size, param_size, JT);
+        DSPF_dp_mat_trans(J, residual_size, param_size, JT);
+        // MatrixMath_Transpose(J, residual_size, param_size, JT);
         
-        // 计算 JTJ = J' * J
-        MatrixMath_Multiply(JT, J, param_size, residual_size, param_size, JTJ);
+        // 计算 A = JTJ = J' * J
+        // MatrixMath_Multiply(JT, J, param_size, residual_size, param_size, A);
+        DSPF_dp_mat_mul_gemm_cn(JT, 1.0, param_size, residual_size, J, param_size, A);
         
         // 计算 JTr = J' * r
         MatrixMath_Multiply(JT, r, param_size, residual_size, 1, JTr);
+        // DSPF_dp_mat_mul_gemm_cn(JT, 1.0, param_size, residual_size, r, 1, JTr);
         
-        // A = JTJ + lambda * I
-        memcpy(A, JTJ, param_size * param_size * sizeof(opt_scalar_t));
+        // A = A + lambda * I
+        // memcpy(A, L, param_size * param_size * sizeof(opt_scalar_t));
         // 添加lambda到对角线
-        int i;
-        for (i = 0; i < param_size; i++) {
-            A[i * param_size + i] += lambda;
-        }
+        // int i;
+        // for (i = 0; i < param_size; i++) {
+        //     A[i * param_size + i] += lambda;
+        // }
+        A[0] += lambda;  A[7] += lambda;  A[14] += lambda;
+        A[21] += lambda; A[28] += lambda; A[35] += lambda;
         
         // b = -JTr
-        for (i = 0; i < param_size; i++) {
-            dx[i] = -JTr[i];
-        }
+        // for (i = 0; i < param_size; i++) {
+        //     dx[i] = -JTr[i];
+        // }
+        b[0] = -JTr[0]; b[1] = -JTr[1]; b[2] = -JTr[2];
+        b[3] = -JTr[3]; b[4] = -JTr[4]; b[5] = -JTr[5];
         
         // 求解线性方程组 A * dx = b
-        memcpy(A_copy, A, param_size * param_size * sizeof(opt_scalar_t));
+        // memcpy(A_copy, A, param_size * param_size * sizeof(opt_scalar_t));
         
         // 使用MatrixMath的矩阵求逆
-        if (MatrixMath_Invert(A_copy, param_size) != 0) {
-            // 矩阵不可逆
-            if (debug) {
-                printf("Optimizer_LM: Matrix inversion failed at iteration %d\n", iter);
-            }
-#if !OPT_LM_FORBIDDEN_DYNAMIC_ALLOCATION
-            FREE_PTR(dx_new); FREE_PTR(A_copy); FREE_PTR(A); FREE_PTR(JT); FREE_PTR(JTJ); FREE_PTR(JTr);
-            FREE_PTR(x); FREE_PTR(r); FREE_PTR(J); FREE_PTR(dx); FREE_PTR(x_new); FREE_PTR(r_new);
-            FREE_PTR(result->x_hat); FREE_PTR(result->resnorm);
-#endif
-            return -3;
-        }
+//         if (MatrixMath_Invert(A_copy, param_size) != 0) {
+//             // 矩阵不可逆
+//             if (debug) {
+//                 printf("Optimizer_LM: Matrix inversion failed at iteration %d\n", iter);
+//             }
+// #if !OPT_LM_FORBIDDEN_DYNAMIC_ALLOCATION
+//             FREE_PTR(dx_new); FREE_PTR(A_copy); FREE_PTR(A); FREE_PTR(JT); FREE_PTR(L); FREE_PTR(JTr);
+//             FREE_PTR(x); FREE_PTR(r); FREE_PTR(J); FREE_PTR(dx); FREE_PTR(x_new); FREE_PTR(r_new);
+//             FREE_PTR(result->x_hat); FREE_PTR(result->resnorm); FREE_PTR(b); FREE_PTR(y);
+// #endif
+//             return -3;
+//         }
         
-        // dx = A^(-1) * b
-        MatrixMath_Multiply(A_copy, dx, param_size, param_size, 1, dx_new);
-        memcpy(dx, dx_new, param_size * sizeof(opt_scalar_t));
+//         // dx = A^(-1) * b
+//         MatrixMath_Multiply(A_copy, dx, param_size, param_size, 1, dx_new);
+//         memcpy(dx, dx_new, param_size * sizeof(opt_scalar_t));
+
+        // Cholesky 分解
+        DSPF_dp_cholesky(0, param_size, A, L);
+        // Cholesky 解线性方程 A*dx = b; L*LT*dx=b; L*y=b;
+        DSPF_dp_cholesky_solver(param_size, L, y, b, dx);
         
         // 调试输出
         if (debug) {
             printf("[Optimizer_LM] Iter %2d: cost = %.3e\n", iter, cost);
         }
         
-        // 收敛判断
-        if (pt_vector_norm(dx, param_size) < TolX && opt_vector_norm(r, residual_size) < TolR) {
-            if (debug) {
-                printf("[Optimizer_LM]: Converged by residual norm.\n");
+        // 收敛判断2: 参数变化足够小
+        if (opt_vector_norm(dx, param_size) < TolX || opt_vector_norm(r, residual_size) < TolR) {
+            if (opt_vector_norm(r, residual_size) > TolR) {
+                if (debug) {
+                    printf("[Optimizer_LM] LM failed: Residual(%.3e) norm cannot converge.\n", 
+                           opt_vector_norm(r, residual_size));
+                }
             }
-            result->converged = 1;
+            if (debug) {
+                printf("[Optimizer_LM]: Ended iteration by X change.\n");
+            }
+            result->converged = 0;
             result->iter = iter;
             result->final_cost = cost;
             memcpy(result->x_hat, x, param_size * sizeof(opt_scalar_t));
@@ -248,38 +323,15 @@ int Optimizer_LM(
             
             // 清理内存
 #if !OPT_LM_FORBIDDEN_DYNAMIC_ALLOCATION
-            FREE_PTR(dx_new); FREE_PTR(A_copy); FREE_PTR(A); FREE_PTR(JT); FREE_PTR(JTJ); FREE_PTR(JTr);
+            FREE_PTR(dx_new); FREE_PTR(A_copy); FREE_PTR(A); FREE_PTR(JT); FREE_PTR(L); FREE_PTR(JTr);
             FREE_PTR(x); FREE_PTR(r); FREE_PTR(J); FREE_PTR(dx); FREE_PTR(x_new); FREE_PTR(r_new);
+            FREE_PTR(b); FREE_PTR(y);
 #endif
-            return 0; // 成功收敛
+            return 0; // 正常结束但未完全收敛
         }
         
-//         // 收敛判断2: 参数变化足够小
-//         if (opt_vector_norm(dx, param_size) < TolX) {
-//             if (opt_vector_norm(r, residual_size) > TolR) {
-//                 if (debug) {
-//                     printf("[Optimizer_LM] LM failed: Residual(%.3e) norm cannot converge.\n", 
-//                            opt_vector_norm(r, residual_size));
-//                 }
-//             }
-//             if (debug) {
-//                 printf("[Optimizer_LM]: Ended iteration by X change.\n");
-//             }
-//             result->converged = 0;
-//             result->iter = iter;
-//             result->final_cost = cost;
-//             memcpy(result->x_hat, x, param_size * sizeof(opt_scalar_t));
-//             memcpy(result->resnorm, r, residual_size * sizeof(opt_scalar_t));
-            
-//             // 清理内存
-// #if !OPT_LM_FORBIDDEN_DYNAMIC_ALLOCATION
-//             FREE_PTR(dx_new); FREE_PTR(A_copy); FREE_PTR(A); FREE_PTR(JT); FREE_PTR(JTJ); FREE_PTR(JTr);
-//             FREE_PTR(x); FREE_PTR(r); FREE_PTR(J); FREE_PTR(dx); FREE_PTR(x_new); FREE_PTR(r_new);
-// #endif
-//             return 0; // 正常结束但未完全收敛
-//         }
-        
         // 尝试新参数
+        int i;
         for (i = 0; i < param_size; i++) {
             x_new[i] = x[i] + dx[i];
         }
@@ -320,7 +372,7 @@ int Optimizer_LM(
             
             // 清理内存
 #if !OPT_LM_FORBIDDEN_DYNAMIC_ALLOCATION
-            FREE_PTR(dx_new); FREE_PTR(A_copy); FREE_PTR(A); FREE_PTR(JT); FREE_PTR(JTJ); FREE_PTR(JTr);
+            FREE_PTR(dx_new); FREE_PTR(A_copy); FREE_PTR(A); FREE_PTR(JT); FREE_PTR(L); FREE_PTR(JTr);
             FREE_PTR(x); FREE_PTR(r); FREE_PTR(J); FREE_PTR(dx); FREE_PTR(x_new); FREE_PTR(r_new);
 #endif
             return -4; // lambda过大失败
@@ -328,7 +380,7 @@ int Optimizer_LM(
         
         // 清理临时内存
 #if !OPT_LM_FORBIDDEN_DYNAMIC_ALLOCATION
-        FREE_PTR(dx_new); FREE_PTR(A_copy); FREE_PTR(A); FREE_PTR(JT); FREE_PTR(JTJ); FREE_PTR(JTr);
+        FREE_PTR(dx_new); FREE_PTR(A_copy); FREE_PTR(A); FREE_PTR(JT); FREE_PTR(L); FREE_PTR(JTr);
 #endif
     }
     

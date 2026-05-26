@@ -1,4 +1,6 @@
 #include "LieSophus.h"
+#include "ti/dsplib/dsplib.h"
+#include "ti/mathlib/mathlib.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,10 +29,12 @@
 #define lie_fabs fabs
 #endif
 
+static inline void matrix_eye3(lie_scalar_t* A);
+
 #ifdef SOC_C6678
 #pragma CODE_SECTION(vector_norm, ".sa_code")
 #pragma CODE_SECTION(vector_normalize, ".sa_code")
-#pragma CODE_SECTION(matrix_eye, ".sa_code")
+#pragma CODE_SECTION(matrix_eye3, ".sa_code")
 #pragma CODE_SECTION(matrix_add_scaled, ".sa_code")
 #pragma CODE_SECTION(outer_product, ".sa_code")
 #pragma CODE_SECTION(skew, ".sa_code")
@@ -65,13 +69,10 @@ void vector_normalize(const lie_scalar_t* v, int n, lie_scalar_t* result) {
     }
 }
 
-void matrix_eye(lie_scalar_t* A, int n) {
-    int i, j;
-    for (i = 0; i < n; i++) {
-        for (j = 0; j < n; j++) {
-            A[i * n + j] = (i == j) ? 1.0 : 0.0;
-        }
-    }
+static inline void matrix_eye3(lie_scalar_t* A) {
+    A[0] = 1.0; A[1] = 0.0; A[2] = 0.0;
+    A[3] = 0.0; A[4] = 1.0; A[5] = 0.0;
+    A[6] = 0.0; A[7] = 0.0; A[8] = 1.0;
 }
 
 void matrix_add_scaled(lie_scalar_t* A, lie_scalar_t* B, lie_scalar_t alpha, int m, int n, lie_scalar_t* C) {
@@ -164,7 +165,7 @@ void so3_to_SO3(const lie_scalar_t* phi, lie_scalar_t* R) {
     lie_scalar_t theta = vector_norm(phi, 3);
     
     if (lie_fabs(theta) < 1e-8) {
-        matrix_eye(R, 3);
+        matrix_eye3(R);
     } else {
         lie_scalar_t k[3];
         k[0] = phi[0] / theta;
@@ -198,7 +199,7 @@ void J_left(const lie_scalar_t* phi, lie_scalar_t* J) {
     lie_scalar_t theta = vector_norm(phi, 3);
     
     if (lie_fabs(theta) < 1e-10) {
-        matrix_eye(J, 3);
+        matrix_eye3(J);
     } else {
         lie_scalar_t a[3];
         a[0] = phi[0] / theta;
@@ -282,7 +283,7 @@ void se3_to_SE3(const lie_scalar_t* xi, lie_scalar_t* T) {
     
     if (lie_fabs(theta) < 1e-8) {
         // 小角度近似：R ≈ I, t ≈ rho
-        matrix_eye(R, 3);
+        matrix_eye3(R);
         t[0] = rho[0];
         t[1] = rho[1];
         t[2] = rho[2];

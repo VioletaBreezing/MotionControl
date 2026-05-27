@@ -3,6 +3,16 @@
 #include <string.h>
 #include <stdlib.h>
 
+#ifdef SOC_C6678
+#include "BSP_int.h"
+#include "BSP_timer.h"
+#elif defined(_SIMULAE_IN_X86_)
+#include <windows.h>
+#include <time.h>
+#endif
+
+#include "mirror_reflection_simulation_2RS_myLM.h"
+
 #ifndef min
 #define min(a,b) (((a)<(b))?(a):(b))
 #endif  
@@ -11,11 +21,13 @@
 #define max(a,b) (((a)>(b))?(a):(b))
 #endif
 
-#ifdef _SIMULAE_IN_X86_ 
-
 #include "mirror_reflection_simulation_2RS_myLM.h"
 #include <windows.h>
 #include <time.h>
+
+#ifdef SOC_C6678
+#pragma CODE_SECTION(test_ifm, ".sa_code")
+#endif
 
 int main() {
     printf("=== Testing Mirror Reflection Pose Optimization with Real Initial Guess ===\n");
@@ -123,12 +135,19 @@ int main() {
     // 执行优化并计时 (使用高精度计时器)
     lie_scalar_t xi_result[6];
     lie_scalar_t final_residual[3];
-    
+
+#ifdef _SIMULAE_IN_X86_
     LARGE_INTEGER frequency, start_time, start_time_iter, end_time;
-    double max_exec_time = 1e12;
     QueryPerformanceFrequency(&frequency);
     QueryPerformanceCounter(&start_time);
+#elif defined(SOC_C6678)
+    int start_time, start_time_iter, end_time;
+    start_time = BSP_get_time();
+#else
+#error "Unsupported platform"
+#endif
 
+    double max_exec_time = 1e12;
     int times_cnt = 100000;
     int status = 0;
     lie_scalar_t T[16];
@@ -166,7 +185,13 @@ int main() {
         xi0[0] = trans_init[0]; xi0[1] = trans_init[1]; xi0[2] = trans_init[2];
         xi0[3] = euler_angle_init[0]; xi0[4] = euler_angle_init[1]; xi0[5] = euler_angle_init[2];
 
+#ifdef _SIMULAE_IN_X86_
         QueryPerformanceCounter(&start_time_iter);
+#elif defined(SOC_C6678)
+        start_time_iter = BSP_get_time();
+#else
+#error "Unsupported platform"
+#endif
 
         int act_iter = 0;
         status = mirror_reflection_pose_optimization(
@@ -190,9 +215,16 @@ int main() {
 
         t_est[0] = T[3]; t_est[1] = T[7]; t_est[2] = T[11];
 
+#ifdef _SIMULAE_IN_X86_
         QueryPerformanceCounter(&end_time);
         double iter_time_used = (double)(end_time.QuadPart - start_time_iter.QuadPart) / frequency.QuadPart;
-        max_exec_time = min(max_exec_time, iter_time_used);
+#elif defined(SOC_C6678)
+        end_time = BSP_get_time();
+        double iter_time_used = BSP_calc_us_interval(start_time_iter, end_time) * 1e-6;
+#else
+#error "Unsupported platform"
+#endif
+        max_exec_time = max(max_exec_time, iter_time_used);
 
         max_trans_error[0] = max(max_trans_error[0], fabs(t_est[0] - tx));
         max_trans_error[1] = max(max_trans_error[1], fabs(t_est[1] - ty));
@@ -204,9 +236,14 @@ int main() {
 
         max_iter = max(max_iter, act_iter);
     }
-    
+#ifdef _SIMULAE_IN_X86_
     QueryPerformanceCounter(&end_time);
     double cpu_time_used = (double)(end_time.QuadPart - start_time.QuadPart) / frequency.QuadPart / times_cnt;
+#elif defined(SOC_C6678)
+    double cpu_time_used = BSP_calc_us_interval(start_time, end_time) * 1e-6 / times_cnt;
+#else
+#error "Unsupported platform"
+#endif
     
     if (status == 0) {
         printf("\n✅ Optimization successful!\n");
@@ -307,7 +344,7 @@ int main() {
     return 0;
 }
 
-#else
+#if 0
 #include "BSP_uart.h"
 #include "BSP_eth.h"
 #include "BSP_shm.h"

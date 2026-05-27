@@ -146,13 +146,19 @@ void Get_RS2_IFM_MS_ResFcn(const opt_scalar_t* xi, void* args, opt_scalar_t* res
     lie_scalar_t t[3] = {T[3], T[7], T[11]};
     
     // 计算每条光路的预测光程
-    int i;
-    for (i = 0; i < num_rays; i++) {
-        lie_scalar_t h_pred = cal_light_dis(R, t, 
-                                          opt_args->rays[i].a, opt_args->rays[i].u,
-                                          opt_args->rays[i].p_B, opt_args->rays[i].n_B);
-        residual[i] = h_pred - opt_args->h_meas[i];
-    }
+    // int i;
+    // for (i = 0; i < num_rays; i++) {
+    //     lie_scalar_t h_pred = cal_light_dis(R, t, 
+    //                                       opt_args->rays[i].a, opt_args->rays[i].u,
+    //                                       opt_args->rays[i].p_B, opt_args->rays[i].n_B);
+    //     residual[i] = h_pred - opt_args->h_meas[i];
+    // }
+    lie_scalar_t h_pred = cal_light_dis(R, t, opt_args->rays[0].a, opt_args->rays[0].u, opt_args->rays[0].p_B, opt_args->rays[0].n_B);
+    residual[0] = h_pred - opt_args->h_meas[0];
+    h_pred = cal_light_dis(R, t, opt_args->rays[1].a, opt_args->rays[1].u, opt_args->rays[1].p_B, opt_args->rays[1].n_B);
+    residual[1] = h_pred - opt_args->h_meas[1];
+    h_pred = cal_light_dis(R, t, opt_args->rays[2].a, opt_args->rays[2].u, opt_args->rays[2].p_B, opt_args->rays[2].n_B);
+    residual[2] = h_pred - opt_args->h_meas[2];
 }
 
 // 雅可比函数：用于LM优化

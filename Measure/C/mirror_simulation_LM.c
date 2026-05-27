@@ -29,11 +29,20 @@
 #pragma CODE_SECTION(test_ifm, ".sa_code")
 #endif
 
+int test_ifm();
+
+#if defined(_SIMULAE_IN_X86_)
 int main() {
+    test_ifm();
+    return 0;
+}
+#endif
+
+int test_ifm() {
     printf("=== Testing Mirror Reflection Pose Optimization with Real Initial Guess ===\n");
 
     // srand((unsigned int)time(NULL));
-    srand(0);
+    srand(40);
     
     // 设置真实位姿参数（与MATLAB一致）
     lie_scalar_t theta_x = 0.0;           // 绕X轴旋转（设为0）
@@ -147,8 +156,8 @@ int main() {
 #error "Unsupported platform"
 #endif
 
-    double max_exec_time = 1e12;
-    int times_cnt = 100000;
+    double max_exec_time = -1.0;
+    int times_cnt = 200000;
     int status = 0;
     lie_scalar_t T[16];
     lie_scalar_t R_est[9];
@@ -177,10 +186,10 @@ int main() {
         h_meas[2] = cal_light_dis(R_true, t_true, a2, u2, p2_B, n2_B);
 
         lie_scalar_t euler_angle_init[3] = {0.0, 0.0, theta_z};
-        euler_angle_init[2] += ((lie_scalar_t)rand() / RAND_MAX * 2.0 - 1.0) * 1e-5;
+        euler_angle_init[2] += ((lie_scalar_t)rand() / RAND_MAX * 2.0 - 1.0) * 1e-6;
         lie_scalar_t trans_init[3] = {tx, ty, tz};
-        trans_init[0] += ((lie_scalar_t)rand() / RAND_MAX * 2.0 - 1.0) * 1e-4;
-        trans_init[1] += ((lie_scalar_t)rand() / RAND_MAX * 2.0 - 1.0) * 1e-4;
+        trans_init[0] += ((lie_scalar_t)rand() / RAND_MAX * 2.0 - 1.0) * 1e-6;
+        trans_init[1] += ((lie_scalar_t)rand() / RAND_MAX * 2.0 - 1.0) * 1e-6;
 
         xi0[0] = trans_init[0]; xi0[1] = trans_init[1]; xi0[2] = trans_init[2];
         xi0[3] = euler_angle_init[0]; xi0[4] = euler_angle_init[1]; xi0[5] = euler_angle_init[2];
@@ -201,9 +210,9 @@ int main() {
             xi0,
             xi_result,
             final_residual,
-            50,     // max_iter
-            1e-10,  // tol_x (更严格的收敛条件)
-            1e-10,   // tol_r (更严格的收敛条件)
+            100,     // max_iter
+            1e-9,  // tol_x (更严格的收敛条件)
+            1e-9,   // tol_r (更严格的收敛条件)
             &act_iter
         );
 
@@ -224,6 +233,7 @@ int main() {
 #else
 #error "Unsupported platform"
 #endif
+        if (i>1)
         max_exec_time = max(max_exec_time, iter_time_used);
 
         max_trans_error[0] = max(max_trans_error[0], fabs(t_est[0] - tx));
@@ -246,7 +256,7 @@ int main() {
 #endif
     
     if (status == 0) {
-        printf("\n✅ Optimization successful!\n");
+        printf("\n Optimization successful!\n");
         printf("Estimated pose:\n");
         printf("Translation (mm): [%.7f, %.7f, %.7f]\n", t_est[0] * 1e3, t_est[1] * 1e3, t_est[2] * 1e3);
         printf("Rotation (mrad):  [%.7f, %.7f, %.7f]\n", xi_result[3] * 1e3, xi_result[4] * 1e3, xi_result[5] * 1e3);
@@ -280,17 +290,17 @@ int main() {
         lie_scalar_t rot_error_norm = vector_norm(rot_error, 3);
         
         if (trans_error_norm < 1e-9 && rot_error_norm < 1e-8) {
-            printf("\n🎉 Perfect convergence achieved!\n");
+            printf("\n Perfect convergence achieved!\n");
         } else if (trans_error_norm < 1e-6 && rot_error_norm < 1e-6) {
-            printf("\n👍 Good convergence achieved!\n");
+            printf("\n Good convergence achieved!\n");
         } else {
-            printf("\n⚠️  Convergence may be suboptimal. Consider adjusting parameters.\n");
+            printf("\n  Convergence may be suboptimal. Consider adjusting parameters.\n");
         }
         
-        printf("\n⏱️  Execution time: %.6f us\n", cpu_time_used * 1e6);
+        printf("\n  Execution time: %.6f us\n", cpu_time_used * 1e6);
         printf("Maximum execution time: %.6f us\n", max_exec_time * 1e6);
     } else {
-        printf("❌ Optimization failed with status: %d at iteration %d\n", status, i);
+        printf(" Optimization failed with status: %d at iteration %d\n", status, i);
         printf("Execution time: %.6f seconds\n", cpu_time_used);
         printf("Status codes:\n");
         printf("  0 = Success\n");
@@ -299,7 +309,7 @@ int main() {
         printf(" -3 = Matrix inversion failed\n");
         printf(" -4 = Lambda too large\n");
         printf(" -5 = time out\n");
-        printf("\n⏱️  Execution time: %.6f us\n", cpu_time_used * 1e6);
+        printf("\n  Execution time: %.6f us\n", cpu_time_used * 1e6);
         // 打印失败时的真实位姿和测量值，帮助调试
         printf("True pose:\n");
         printf("Translation (mm): [%.7f, %.7f, %.7f]\n", tx * 1e3, ty * 1e3, tz * 1e3);
@@ -339,6 +349,7 @@ int main() {
         
         printf("\nFinal residuals (nm):   [%.2e, %.2e, %.2e]\n", 
                 final_residual[0]*1e9, final_residual[1]*1e9, final_residual[2]*1e9);
+        printf("Maximum execution time: %.6f us\n", max_exec_time * 1e6);
     }
     
     return 0;

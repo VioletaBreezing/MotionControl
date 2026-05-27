@@ -198,7 +198,7 @@ void so3_to_SO3(const lie_scalar_t* phi, lie_scalar_t* R) {
     }
 }
 
-void J_left(const lie_scalar_t* phi, lie_scalar_t* J) {
+static inline void J_left(const lie_scalar_t* phi, lie_scalar_t* J) {
     lie_scalar_t theta = vector_norm(phi, 3);
     
     if (lie_fabs(theta) < 1e-13) {

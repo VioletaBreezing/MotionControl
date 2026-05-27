@@ -16,7 +16,7 @@ function h = cal_light_distance(x,y,rz,args)
         dy(i) = y - a{i}(2);
     end
 
-    zeta(1) = zeta(1) + pi/2;
+    zeta(1) = zeta(1) - pi/2;
 
     h = zeros(3, 1);
     for i = 1:3

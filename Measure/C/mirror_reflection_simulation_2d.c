@@ -439,16 +439,16 @@ void mirror_sim_2d_main(int N) {
         params.b[2] = 0.124;
         
         // x = 0 * 2 * (rand()-0.5)
-        lie_scalar_t x = 1e-3 * 2.0 * (((lie_scalar_t)rand() / RAND_MAX) - 0.5);
+        // lie_scalar_t x = 1e-3 * 2.0 * (((lie_scalar_t)rand() / RAND_MAX) - 0.5);
         
-        // y = 0 * rand()
-        lie_scalar_t y = 2e-1 * ((lie_scalar_t)rand() / RAND_MAX);
+        // // y = 0 * rand()
+        // lie_scalar_t y = 2e-1 * ((lie_scalar_t)rand() / RAND_MAX);
         
-        // rz = 1e-4 * (rand()-0.5)
-        lie_scalar_t rz = 1e-3 * 2.0 * (((lie_scalar_t)rand() / RAND_MAX) - 0.5);
-        // lie_scalar_t x = px[iter];
-        // lie_scalar_t y = py[iter];
-        // lie_scalar_t rz = prz[iter];
+        // // rz = 1e-4 * (rand()-0.5)
+        // lie_scalar_t rz = 1e-3 * 2.0 * (((lie_scalar_t)rand() / RAND_MAX) - 0.5);
+        lie_scalar_t x = px[iter];
+        lie_scalar_t y = py[iter];
+        lie_scalar_t rz = prz[iter];
         
         // 更新参数
         update_params(x, y, rz, &params);

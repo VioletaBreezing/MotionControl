@@ -18,19 +18,21 @@
 #pragma CODE_SECTION(mirror_sim_2d_main, ".sa_code")
 #endif
 
+static const lie_scalar_t PI = 3.14159265358979323846;
+
 static inline lie_scalar_t my_sin(lie_scalar_t x)
 {
-    return x - x * x * x / 6; // + x * x * x * x * x / 120;
+    return x;// - x * x * x / 6; // + x * x * x * x * x / 120;
 };
 
 static inline lie_scalar_t my_cos(lie_scalar_t x)
 {
-    return 1 - x * x / 2; // + x * x * x * x / 24;
+    return 1;// - x * x / 2; // + x * x * x * x / 24;
 };
 
 static inline lie_scalar_t my_atan(lie_scalar_t x)
 { 
-    return x - x * x * x / 3; // + x * x * x * x * x / 15;
+    return x;// - x * x * x / 3; // + x * x * x * x * x / 15;
 }
 
 /**
@@ -47,7 +49,6 @@ static inline void cal_light_distance(const MirrorSim2D_Params* params, lie_scal
  */
 static inline void update_params(lie_scalar_t x, lie_scalar_t y, lie_scalar_t rz, MirrorSim2D_Params* params) {
     int i;
-    const lie_scalar_t PI = 3.14159265358979323846;
     
     for (i = 0; i < 3; i++) {
         // gamma(i) = rz + psi(i) - phi(i)
@@ -76,13 +77,14 @@ static inline void update_params(lie_scalar_t x, lie_scalar_t y, lie_scalar_t rz
         params->beta[i] = -lie_cos(params->gamma[i]);
         
         // f(i) = beta(i) / (2*beta(i)^2 - 1)
-        lie_scalar_t beta_sq = params->beta[i] * params->beta[i];
-        lie_scalar_t denom = 2.0 * beta_sq - 1.0;
+        // lie_scalar_t beta_sq = params->beta[i] * params->beta[i];
+        // lie_scalar_t denom = 2.0 * beta_sq - 1.0;
         // if (lie_fabs(denom) < 1e-12) {
         //     params->f[i] = 0.0; // 避免除零
         // } else {
-            params->f[i] = params->beta[i] / denom;
+        //     params->f[i] = params->beta[i] / denom;
         // }
+        params->f[i] = -1;
         
         // dx(i) = x - a{i}(1)
         params->dx[i] = x - params->a_x[i];
@@ -103,32 +105,35 @@ static inline void cal_gradient(const MirrorSim2D_Params* params, lie_scalar_t* 
     int i;
     
     for (i = 0; i < 3; i++) {
-        lie_scalar_t beta = params->beta[i];
-        lie_scalar_t f = params->f[i];
-        lie_scalar_t sin_zeta = params->sin_zeta[i];
-        lie_scalar_t cos_zeta = params->cos_zeta[i];
-        lie_scalar_t g = params->g[i];
-        lie_scalar_t dx = params->dx[i];
-        lie_scalar_t dy = params->dy[i];
+        // lie_scalar_t beta = params->beta[i];
+        // lie_scalar_t f = params->f[i];
+        // lie_scalar_t sin_zeta = params->sin_zeta[i];
+        // lie_scalar_t cos_zeta = params->cos_zeta[i];
+        // lie_scalar_t g = params->g[i];
+        // lie_scalar_t dx = params->dx[i];
+        // lie_scalar_t dy = params->dy[i];
         
         // dfdr = -((2*beta^2+1)/(2*beta^2-1))^2 * sin(gamma(i))
-        lie_scalar_t beta_sq = beta * beta;
-        lie_scalar_t numer = 2.0 * beta_sq + 1.0;
-        lie_scalar_t denom = 2.0 * beta_sq - 1.0;
+        // lie_scalar_t beta_sq = beta * beta;
+        // lie_scalar_t numer = 2.0 * beta_sq + 1.0;
+        // lie_scalar_t denom = 2.0 * beta_sq - 1.0;
         
-        lie_scalar_t ratio;
+        // lie_scalar_t ratio;
         // if (lie_fabs(denom) < 1e-12) {
         //     ratio = 0.0;
         // } else {
-            ratio = numer / denom;
+        //     ratio = numer / denom;
         // }
-        lie_scalar_t dfdr = -(ratio * ratio) * lie_sin(params->gamma[i]);
+        // lie_scalar_t dfdr = -(ratio * ratio) * lie_sin(params->gamma[i]);
+        lie_scalar_t dfdr = -9.0 * params->gamma[i];
         
         // dgdr = dx * cos_zeta + dy * sin_zeta
-        lie_scalar_t dgdr = dx * cos_zeta + dy * sin_zeta;
+        // lie_scalar_t dgdr = dx * cos_zeta + dy * sin_zeta;
+        lie_scalar_t dgdr = params->dx[i] * params->cos_zeta[i] + params->dy[i] * params->sin_zeta[i];
         
         // grad(i) = dfdr * g + f * dgdr
-        grad[i] = dfdr * g + f * dgdr;
+        // grad[i] = dfdr * g + f * dgdr;
+        grad[i] = dfdr * params->g[i] - dgdr;
     }
 }
 
@@ -238,14 +243,14 @@ static inline void cal_3dof_grad(const lie_scalar_t* h, MirrorSim2D_Params* para
     cal_3dof(h, params, rz0, 0, &x, &y, &rz0);
 #ifdef _WIN32
     QueryPerformanceCounter(&end);
-    t[0] = (lie_scalar_t)(end.QuadPart - start.QuadPart) * 1000000.0 / freq.QuadPart;  // 微秒
+    t[0] += (lie_scalar_t)(end.QuadPart - start.QuadPart) * 1000000.0 / freq.QuadPart;  // 微秒
 #else
     end = clock();
-    t[0] = (lie_scalar_t)(end - start) / CLOCKS_PER_SEC;
+    t[0] += (lie_scalar_t)(end - start) / CLOCKS_PER_SEC;
 #endif
     
     // 迭代优化（只迭代1次，与MATLAB代码一致）
-    // for (int iter = 0; iter < 1; iter++) {
+    for (int iter = 0; iter < 3; iter++) {
         // 第2步：update_params
 #ifdef _WIN32
         QueryPerformanceCounter(&start);
@@ -255,10 +260,10 @@ static inline void cal_3dof_grad(const lie_scalar_t* h, MirrorSim2D_Params* para
         update_params(x, y, rz0, params);
 #ifdef _WIN32
         QueryPerformanceCounter(&end);
-        t[1] = (lie_scalar_t)(end.QuadPart - start.QuadPart) * 1000000.0 / freq.QuadPart;  // 微秒
+        t[1] += (lie_scalar_t)(end.QuadPart - start.QuadPart) * 1000000.0 / freq.QuadPart;  // 微秒
 #else
         end = clock();
-        t[1] = (lie_scalar_t)(end - start) / CLOCKS_PER_SEC;
+        t[1] += (lie_scalar_t)(end - start) / CLOCKS_PER_SEC;
 #endif
         
         // 第3步：cal_gradient
@@ -271,10 +276,10 @@ static inline void cal_3dof_grad(const lie_scalar_t* h, MirrorSim2D_Params* para
         cal_gradient(params, grad);
 #ifdef _WIN32
         QueryPerformanceCounter(&end);
-        t[2] = (lie_scalar_t)(end.QuadPart - start.QuadPart) * 1000000.0 / freq.QuadPart;  // 微秒
+        t[2] += (lie_scalar_t)(end.QuadPart - start.QuadPart) * 1000000.0 / freq.QuadPart;  // 微秒
 #else
         end = clock();
-        t[2] = (lie_scalar_t)(end - start) / CLOCKS_PER_SEC;
+        t[2] += (lie_scalar_t)(end - start) / CLOCKS_PER_SEC;
 #endif
         
         // 第4步：计算残差 residual = cal_light_distance(params) - h
@@ -286,15 +291,18 @@ static inline void cal_3dof_grad(const lie_scalar_t* h, MirrorSim2D_Params* para
         lie_scalar_t h_pred[3];
         cal_light_distance(params, h_pred);
         lie_scalar_t residual[3];
-        for (i = 0; i < 3; i++) {
-            residual[i] = h_pred[i] - h[i];
-        }
+        // for (i = 0; i < 3; i++) {
+        //     residual[i] = h_pred[i] - h[i];
+        // }
+        residual[0] = h_pred[0] - h[0];
+        residual[1] = h_pred[1] - h[1];
+        residual[2] = h_pred[2] - h[2];
 #ifdef _WIN32
         QueryPerformanceCounter(&end);
-        t[3] = (lie_scalar_t)(end.QuadPart - start.QuadPart) * 1000000.0 / freq.QuadPart;  // 微秒
+        t[3] += (lie_scalar_t)(end.QuadPart - start.QuadPart) * 1000000.0 / freq.QuadPart;  // 微秒
 #else
         end = clock();
-        t[3] = (lie_scalar_t)(end - start) / CLOCKS_PER_SEC;
+        t[3] += (lie_scalar_t)(end - start) / CLOCKS_PER_SEC;
 #endif
         
         // 第5步：计算更新量 dr = -50 * grad' * residual
@@ -306,10 +314,10 @@ static inline void cal_3dof_grad(const lie_scalar_t* h, MirrorSim2D_Params* para
         lie_scalar_t dr = -50.0 * (grad[0] * residual[0] + grad[1] * residual[1] + grad[2] * residual[2]);
 #ifdef _WIN32
         QueryPerformanceCounter(&end);
-        t[4] = (lie_scalar_t)(end.QuadPart - start.QuadPart) * 1000000.0 / freq.QuadPart;  // 微秒
+        t[4] += (lie_scalar_t)(end.QuadPart - start.QuadPart) * 1000000.0 / freq.QuadPart;  // 微秒
 #else
         end = clock();
-        t[4] = (lie_scalar_t)(end - start) / CLOCKS_PER_SEC;
+        t[4] += (lie_scalar_t)(end - start) / CLOCKS_PER_SEC;
 #endif
         
         // 第6步：更新rz
@@ -321,10 +329,10 @@ static inline void cal_3dof_grad(const lie_scalar_t* h, MirrorSim2D_Params* para
         rz0 = rz0 + dr;
 #ifdef _WIN32
         QueryPerformanceCounter(&end);
-        t[5] = (lie_scalar_t)(end.QuadPart - start.QuadPart) * 1000000.0 / freq.QuadPart;  // 微秒
+        t[5] += (lie_scalar_t)(end.QuadPart - start.QuadPart) * 1000000.0 / freq.QuadPart;  // 微秒
 #else
         end = clock();
-        t[5] = (lie_scalar_t)(end - start) / CLOCKS_PER_SEC;
+        t[5] += (lie_scalar_t)(end - start) / CLOCKS_PER_SEC;
 #endif
         
         // 第7步：再次update_params
@@ -336,10 +344,10 @@ static inline void cal_3dof_grad(const lie_scalar_t* h, MirrorSim2D_Params* para
         update_params(x, y, rz0, params);
 #ifdef _WIN32
         QueryPerformanceCounter(&end);
-        t[6] = (lie_scalar_t)(end.QuadPart - start.QuadPart) * 1000000.0 / freq.QuadPart;  // 微秒
+        t[6] += (lie_scalar_t)(end.QuadPart - start.QuadPart) * 1000000.0 / freq.QuadPart;  // 微秒
 #else
         end = clock();
-        t[6] = (lie_scalar_t)(end - start) / CLOCKS_PER_SEC;
+        t[6] += (lie_scalar_t)(end - start) / CLOCKS_PER_SEC;
 #endif
         
         // 第8步：再次cal_3dof
@@ -351,12 +359,12 @@ static inline void cal_3dof_grad(const lie_scalar_t* h, MirrorSim2D_Params* para
         cal_3dof(h, params, rz0, 1, &x, &y, &rz0);
 #ifdef _WIN32
         QueryPerformanceCounter(&end);
-        t[7] = (lie_scalar_t)(end.QuadPart - start.QuadPart) * 1000000.0 / freq.QuadPart;  // 微秒
+        t[7] += (lie_scalar_t)(end.QuadPart - start.QuadPart) * 1000000.0 / freq.QuadPart;  // 微秒
 #else
         end = clock();
-        t[7] = (lie_scalar_t)(end - start) / CLOCKS_PER_SEC;
+        t[7] += (lie_scalar_t)(end - start) / CLOCKS_PER_SEC;
 #endif
-    // }
+    }
     
     *tx = x;
     *ty = y;
@@ -383,11 +391,27 @@ void mirror_sim_2d_main(int N) {
 #endif
     
     lie_scalar_t t_slice[8];
+    lie_scalar_t t_slice_max[8];
     lie_scalar_t t_total = 0;
     memset(t_slice, 0, sizeof(t_slice));
+    memset(t_slice_max, 0, sizeof(t_slice_max));
     
     // 初始化随机数种子
     srand((unsigned int)time(NULL));
+
+    int i;
+    lie_scalar_t *px, *py, *prz, *t_axis;
+    px = (lie_scalar_t *)malloc(sizeof(lie_scalar_t) * N);
+    py = (lie_scalar_t *)malloc(sizeof(lie_scalar_t) * N);
+    prz = (lie_scalar_t *)malloc(sizeof(lie_scalar_t) * N);
+    t_axis = (lie_scalar_t *)malloc(sizeof(lie_scalar_t) * N);
+    lie_scalar_t Ts = 2e-4; // 200us采样时间
+    for (i = 0; i < N; i++) { 
+        px[i] = 1e-1 * sin(2*PI*i*Ts);
+        py[i] = 2e-1 * cos(2*PI*i*Ts);
+        prz[i] = 1e-3 * sin(2*PI*i*Ts);
+        t_axis[i] = i * Ts;
+    }
     
     int iter;
     for (iter = 0; iter < N; iter++) {
@@ -395,33 +419,36 @@ void mirror_sim_2d_main(int N) {
         
         // 初始化参数
         // phi = [rand()*1e-6, rand()*1e-6, rand()*1e-6]
-        params.phi[0] = ((lie_scalar_t)rand() / RAND_MAX) * 1e-6;
-        params.phi[1] = ((lie_scalar_t)rand() / RAND_MAX) * 1e-6;
-        params.phi[2] = ((lie_scalar_t)rand() / RAND_MAX) * 1e-6;
+        params.phi[0] = -2e-3;// * 2.0 * (((lie_scalar_t)rand() / RAND_MAX) - 0.5);
+        params.phi[1] = -2e-3;// * 2.0 * (((lie_scalar_t)rand() / RAND_MAX) - 0.5);
+        params.phi[2] = -2e-3;// * 2.0 * (((lie_scalar_t)rand() / RAND_MAX) - 0.5);
         
         // psi = [rand()*1e-6, rand()*1e-6, rand()*1e-6]
-        params.psi[0] = ((lie_scalar_t)rand() / RAND_MAX) * 1e-6;
-        params.psi[1] = ((lie_scalar_t)rand() / RAND_MAX) * 1e-6;
-        params.psi[2] = ((lie_scalar_t)rand() / RAND_MAX) * 1e-6;
+        params.psi[0] = 2e-3;// * 2.0 * (((lie_scalar_t)rand() / RAND_MAX) - 0.5);
+        params.psi[1] = 2e-3;// * 2.0 * (((lie_scalar_t)rand() / RAND_MAX) - 0.5);
+        params.psi[2] = 2e-3;// * 2.0 * (((lie_scalar_t)rand() / RAND_MAX) - 0.5);
         
         // a = {[-0.2; 0.1], [-0.1; -0.2], [0.1; -0.2]}
-        params.a_x[0] = -0.2; params.a_y[0] = 0.1;
-        params.a_x[1] = -0.1; params.a_y[1] = -0.2;
-        params.a_x[2] = 0.1;  params.a_y[2] = -0.2;
+        params.a_x[0] = -0.25; params.a_y[0] = 0.1;
+        params.a_x[1] = -0.10; params.a_y[1] = -0.2;
+        params.a_x[2] = 0.10;  params.a_y[2] = -0.2;
         
         // b = [0.1; 0.1; 0.1]
-        params.b[0] = 0.1;
-        params.b[1] = 0.1;
-        params.b[2] = 0.1;
+        params.b[0] = 0.12;
+        params.b[1] = 0.125;
+        params.b[2] = 0.124;
         
         // x = 0 * 2 * (rand()-0.5)
-        lie_scalar_t x = 0.0 * 2.0 * (((lie_scalar_t)rand() / RAND_MAX) - 0.5);
+        lie_scalar_t x = 1e-3 * 2.0 * (((lie_scalar_t)rand() / RAND_MAX) - 0.5);
         
         // y = 0 * rand()
-        lie_scalar_t y = 0.0 * ((lie_scalar_t)rand() / RAND_MAX);
+        lie_scalar_t y = 2e-1 * ((lie_scalar_t)rand() / RAND_MAX);
         
         // rz = 1e-4 * (rand()-0.5)
-        lie_scalar_t rz = 1e-4 * (((lie_scalar_t)rand() / RAND_MAX) - 0.5);
+        lie_scalar_t rz = 1e-3 * 2.0 * (((lie_scalar_t)rand() / RAND_MAX) - 0.5);
+        // lie_scalar_t x = px[iter];
+        // lie_scalar_t y = py[iter];
+        // lie_scalar_t rz = prz[iter];
         
         // 更新参数
         update_params(x, y, rz, &params);
@@ -453,6 +480,7 @@ void mirror_sim_2d_main(int N) {
         lie_scalar_t sum_t_slice = 0;
         for (i = 0; i < 8; i++) {
             sum_t_slice += t[i];
+            if (t[i] > t_slice_max[i]) t_slice_max[i] = t[i];
         }
         if (sum_t_slice > t_total) 
         {
@@ -495,4 +523,19 @@ void mirror_sim_2d_main(int N) {
     printf("  Max error y:                 %.6e\n", max_erry);
     printf("  Max error rz:                %.6e\n", max_errrz);
     printf("  Max computation time:        %.3f us\n", max_time);
+
+    printf("\nMaximum time per step (microseconds):\n");
+    printf("  Step 1 (cal_3dof):           %.3f us\n", t_slice_max[0]);
+    printf("  Step 2 (update_params):      %.3f us\n", t_slice_max[1]);
+    printf("  Step 3 (cal_gradient):       %.3f us\n", t_slice_max[2]);
+    printf("  Step 4 (cal_residual):       %.3f us\n", t_slice_max[3]);
+    printf("  Step 5 (calc_dr):            %.3f us\n", t_slice_max[4]);
+    printf("  Step 6 (update_rz):          %.3f us\n", t_slice_max[5]);
+    printf("  Step 7 (update_params):      %.3f us\n", t_slice_max[6]);
+    printf("  Step 8 (cal_3dof):           %.3f us\n", t_slice_max[7]);
+
+    free(t_axis);
+    free(px);
+    free(py);
+    free(prz);
 }

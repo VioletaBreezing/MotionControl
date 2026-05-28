@@ -26,7 +26,7 @@ typedef float lie_scalar_t;
 #define lie_mean(a, b) (((a) + (b)) * 0.5f)
 #else
 #define lie_fabs fabs
-#define lie_sqrt sqrt
+// #define lie_sqrt sqrt
 #define lie_sin my_sin
 #define lie_cos my_cos
 #define lie_atan my_atan

@@ -15,6 +15,7 @@ $RECYCLE.BIN/
 # MATLAB backup and autosave files
 *.m~
 *.asv
+*.autosave
 autosave/
 
 # MATLAB cache and preferences directories

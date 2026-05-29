@@ -59,7 +59,7 @@ license_*.dat
 *.swo
 
 # test files
-test*
+# test*
 
 # executables
 *.exe

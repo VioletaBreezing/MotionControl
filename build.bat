@@ -1,1 +1,2 @@
 gcc -DOPT_LM_FORBIDDEN_DYNAMIC_ALLOCATION=1 -DFORBIDDEN_DYNAMIC_ALLOCATION=1 -DMATRIXMATH_USE_FLOAT=0 -D_SIMULAE_IN_X86_ -I"LieSophus/C" -I"Optimizer/C" -I"Measure/C" -I"." -O3 -o mirror_simulation_LM.exe Measure/C/mirror_simulation_LM.c Measure/C/mirror_reflection_simulation_2RS_myLM.c Optimizer/C/Optimizer_LM.c LieSophus/C/LieSophus.c LieSophus/C/MatrixMath.c -lm
+gcc -g -o IFM_cal.exe TMP/C/IFM_cal.c -lm

@@ -1,11 +1,11 @@
 clear; clc; close all;
 
 % --- 系统参数 ---
-a = [0.0,   0.05, -0.05;
-     0.05,  0.0,   0.0];
-b = [0.1; 0.1; 0.1];
-psi = [0; 1e-5; -1e-5];
-phi = [0; 2e-5; -2e-5];
+a = [-386.5e-3, -53.2e-3, 53.8e-3;
+      157.7e-3, -241e-3,   -241e-3];
+b = [213e-3; 142e-3; 142e-3];
+psi = [1e-4; 1e-5; -1e-5];
+phi = [-2e-4; 2e-5; -2e-5];
 
 % --- 轨迹设置 ---
 fs = 1 / 2e-4;          % 5000 Hz
@@ -15,7 +15,7 @@ N = length(t);
 
 % True trajectory (1 Hz sine)
 x_true = 2e-3 * sin(2*pi*t);
-y_true = 1e-1 * sin(2*pi*t);      % ±100 mm!
+y_true = 1e-1 + 1e-1 * sin(2*pi*t);      % ±100 mm!
 theta_true = 2e-3 * sin(2*pi*t);
 
 % Preallocate
@@ -26,8 +26,11 @@ err_x = zeros(size(t));
 err_y = zeros(size(t));
 err_theta = zeros(size(t));
 
+max_est_time = -1; avg_time = 0;
+used_est_time = 0; total_time = 0;
+
 % --- Sensor noise (typical high-end interferometer) ---
-noise_rms = 0.31e-9;    % 0.31 nanometer RMS
+noise_rms = 0.31e-9/6;    % 0.31 nanometer RMS
 rng(42); % for reproducibility
 
 % --- Initial guess ---
@@ -42,7 +45,7 @@ for k = 1:N
     [h_true, ~] = sensor_model(x_true(k), y_true(k), theta_true(k), a, b, psi, phi);
     
     % Add realistic sensor noise
-    h_meas = h_true + noise_rms * randn(3, 1);
+    h_meas = h_true;% + noise_rms * randn(3, 1);
     
     % Initial guess: use previous estimate
     if k == 1
@@ -57,7 +60,8 @@ for k = 1:N
     
     % --- 2-step Newton-Raphson ---
     x_cur = x0; y_cur = y0; theta_cur = theta0;
-    for iter = 1:2
+    tic;
+    for iter = 1:1
         [h_est, J] = sensor_model(x_cur, y_cur, theta_cur, a, b, psi, phi);
         r = h_meas - h_est;
         delta = J \ r;
@@ -65,6 +69,9 @@ for k = 1:N
         y_cur = y_cur + delta(2);
         theta_cur = theta_cur + delta(3);
     end
+    used_est_time = toc * 1e6;
+    max_est_time = max([max_est_time, used_est_time]);
+    total_time = total_time + used_est_time;
     
     % Store estimate
     x_est(k) = x_cur;
@@ -75,14 +82,21 @@ for k = 1:N
     err_x(k) = x_cur - x_true(k);  % keep signed for RMS
     err_y(k) = y_cur - y_true(k);
     err_theta(k) = theta_cur - theta_true(k);
+
+    err_x_debug = err_x(k);
+    err_y_debug = err_y(k);
+    err_theta_debug = err_theta(k);
+
+    aaaa = 1;
 end
 
 % --- Final analysis: use RMS error ---
 rms_err_x = sqrt(mean(err_x.^2));
 rms_err_y = sqrt(mean(err_y.^2));
 rms_err_theta = sqrt(mean(err_theta.^2));
+avg_time = total_time / N;
 
-baseline = 0.05; % meters (from your 'a' matrix: max baseline ~5 cm)
+baseline = abs(a(1,3)-a(1,2)); % meters (from your 'a' matrix: max baseline ~5 cm)
 equiv_noise_theta = noise_rms / baseline; % rad
 
 fprintf('\n✅ FINAL RESULT (with %.2f nm RMS sensor noise):\n', noise_rms*1e9);
@@ -90,6 +104,8 @@ fprintf('RMS |Δx| = %.3f nm\n', rms_err_x*1e9);
 fprintf('RMS |Δy| = %.3f nm\n', rms_err_y*1e9);
 fprintf('Equivalent angle noise floor: %.2f nrad\n', equiv_noise_theta*1e9);
 fprintf('Achieved RMS Δθ             : %.2f nrad\n', rms_err_theta*1e9);
+fprintf("Maximum est time: %.3f us\n", max_est_time);
+fprintf("Average est time: %.3f us\n", avg_time);
 
 if rms_err_x < 2*noise_rms && ...
    rms_err_y < 2*noise_rms && ...

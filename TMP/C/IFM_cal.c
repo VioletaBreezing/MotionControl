@@ -295,6 +295,8 @@ int self_test(void) {
     free(err_x);
     free(err_y);
     free(err_theta);
+
+    return 0;
 }
 
 static double randn() {

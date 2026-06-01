@@ -4,6 +4,11 @@
 #include <math.h>
 #include <string.h>
 
+// 添加max宏定义
+#ifndef max
+#define max(a,b) ((a) > (b) ? (a) : (b))
+#endif
+
 #ifdef _WIN32
 #include <time.h>
 #include <windows.h>
@@ -53,8 +58,8 @@ void cal_light_dis(double x, double y, double rz,
         double f = beta / (2*beta*beta - 1);
 
         double zeta = (i == 0) ? (rz + psi[i] - PI/2) : (rz + psi[i]);
-        double dx = x - a_x[0];
-        double dy = y - a_y[0];
+        double dx = x - a_x[i];
+        double dy = y - a_y[i];
         double g = b[i] + dx * sin(zeta) - dy * cos(zeta);
 
         h[i] = f * g;
@@ -71,16 +76,18 @@ void precal(double *h_meas)
         param.h_meas[i] = h_meas[i];
     }
 
-    param.h_pred[0] = param.dx[0] + param.dy[0] * param.zeta[0] - param.b[0];
+    // param.h_pred[0] = param.dx[0] + param.dy[0] * param.zeta[0] - param.b[0];
     param.grad_theta[0] = param.dx[0] * (param.zeta[0] - 9.0 * param.gamma[0]) + \
                           param.dy[0] * (1.0 + 9 * param.gamma[0] * param.zeta[0]) - \
                           9.0 * param.b[0] * param.gamma[0];
-    for (i = 0; i < 2; i++) {
-        param.h_pred[i] = -param.dx[i] * param.zeta[i] + param.dy[i] - param.b[i];
+    for (i = 1; i < 3; i++) {
+        // param.h_pred[i] = -param.dx[i] * param.zeta[i] + param.dy[i] - param.b[i];
         param.grad_theta[i] = -param.dx[i] * (1.0 + 9 * param.gamma[i] * param.zeta[i]) - \
                            param.dy[i] * (param.zeta[i] - 9.0 * param.gamma[i]) - \
                            9.0 * param.b[i] * param.gamma[i];
     }
+    cal_light_dis(param.x, param.y, param.theta, param.psi, param.phi, param.a_x, param.a_y, param.b, param.h_pred);
+    double a = 0;
 }
 
 void cal_3dof(double *h_meas, double *x, double *y, double *theta)
@@ -110,7 +117,7 @@ void cal_3dof(double *h_meas, double *x, double *y, double *theta)
     param.UTU[2] = param.UTU[1];
     param.UTU[3] = 2.0 + param.zeta[0] * param.zeta[0];
 
-    double det = param.UTU[0] * param.UTU[3] - param.UTU[1] * param.UTU[1];
+    double det = param.UTU[0] * param.UTU[3] - param.UTU[1] * param.UTU[2];
     param.UTU_inv[0] =  param.UTU[3] / det;
     param.UTU_inv[1] = -param.UTU[1] / det;
     param.UTU_inv[2] =  param.UTU_inv[1];
@@ -118,7 +125,7 @@ void cal_3dof(double *h_meas, double *x, double *y, double *theta)
 
     param.v[0] = -param.a_x[0] - param.a_y[0] * param.zeta[0] -param.b[0];
     param.v[1] =  param.a_x[1] * param.zeta[1] - param.a_y[1] -param.b[1];
-    param.v[0] =  param.a_x[2] * param.zeta[2] - param.a_y[2] -param.b[2];
+    param.v[2] =  param.a_x[2] * param.zeta[2] - param.a_y[2] -param.b[2];
 
     double c[3];
     c[0] = h_meas[0] - param.v[0];
@@ -151,23 +158,28 @@ void self_test()
     init_param.phi[2] = 2e-3 * 2.0 * (((double)rand() / RAND_MAX) - 0.5);
 
     // a = {[-0.2; 0.1], [-0.1; -0.2], [0.1; -0.2]}
-    init_param.a_x[0] = -0.25; init_param.a_y[0] =  0.1;
-    init_param.a_x[1] = -0.10; init_param.a_y[1] = -0.2;
-    init_param.a_x[2] =  0.10; init_param.a_y[2] = -0.2;
+    init_param.a_x[0] = -0.2; init_param.a_y[0] =  0.1;
+    init_param.a_x[1] = -0.1; init_param.a_y[1] = -0.2;
+    init_param.a_x[2] =  0.1; init_param.a_y[2] = -0.2;
     
     // b = [0.1; 0.1; 0.1]
-    init_param.b[0] = 0.12;
-    init_param.b[1] = 0.125;
-    init_param.b[2] = 0.124;
+    init_param.b[0] = 0.1;
+    init_param.b[1] = 0.1;
+    init_param.b[2] = 0.1;
 
-    init_param.lambda = 50.0;
+    init_param.lambda = 1;
 
     /* 生成期望轨迹 */
     double Ts = 2e-4;
     int trajectory_len = (int)(50/Ts);
-    double *traj_x = (double*)malloc(trajectory_len * sizeof(trajectory_len));
-    double *traj_y = (double*)malloc(trajectory_len * sizeof(trajectory_len));
-    double *traj_theta = (double*)malloc(trajectory_len * sizeof(trajectory_len));
+    double *traj_x = (double*)malloc(trajectory_len * sizeof(double));
+    double *traj_y = (double*)malloc(trajectory_len * sizeof(double));
+    double *traj_theta = (double*)malloc(trajectory_len * sizeof(double));
+
+    if (traj_x == NULL || traj_y == NULL || traj_theta == NULL) {
+        printf("Memory allocation failed!\n");
+        return;
+    }
 
     int i;
     for(i = 0; i < trajectory_len; i++) {
@@ -191,8 +203,8 @@ void self_test()
 #ifdef _WIN32
     QueryPerformanceFrequency(&freq);
 #endif
-    timer_t start_tic, end_tic;
-    double max_time = -1, total_time = 0, avg_time, used_time;
+    timer_t start_tic, end_est_tic, end_precal_tic;
+    double max_est_time = -1, max_precal_time = -1, avg_time, used_est_time, used_precal_time, total_time = 0;
     double err[3]; 
     double max_err[3] = {-1, -1, -1};
 
@@ -207,8 +219,12 @@ void self_test()
 
         timer_start(start_tic);
         cal_3dof(h, &x_est, &y_est, &theta_est);
-        timer_stop(end_tic);
-        cal_time_us(start_tic, end_tic, used_time);
+        timer_stop(end_est_tic);
+        cal_time_us(start_tic, end_est_tic, used_est_time);
+
+        precal(h);
+        timer_stop(end_precal_tic);
+        cal_time_us(start_tic, end_precal_tic, used_precal_time);
 
         err[0] = fabs(x_est - traj_x[i]);
         err[1] = fabs(y_est - traj_y[i]);
@@ -218,11 +234,17 @@ void self_test()
         max_err[1] = max(max_err[1], err[1]);
         max_err[2] = max(max_err[2], err[2]);
 
-        max_time = max(max_time, used_time);
-        total_time += used_time;
-
-        precal(h);
+        max_est_time = max(max_est_time, used_est_time);
+        max_precal_time = max(max_precal_time, used_precal_time);
+        total_time += used_precal_time;
     }
+
+    avg_time = total_time / trajectory_len;
+    printf("max_est_time: %.3f us\n", max_est_time);
+    printf("max_precal_time: %.3f us\n", max_precal_time);
+    printf("avg_time: %.3f us\n", avg_time);
+    printf("max_err: %.2e %.2e %.2e nm(nrad)\n", max_err[0]*1e9, max_err[1]*1e9, max_err[2]*1e9);
+
 }
 
 

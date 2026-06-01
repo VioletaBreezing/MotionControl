@@ -5,8 +5,6 @@
 extern "C" {
 #endif
 
-#define _WIN32
-
 // 2D镜面反射仿真参数结构体
 typedef struct {
     double phi[3];      // phi参数
@@ -28,7 +26,7 @@ typedef struct {
     double h_meas[3];
 
     double UTU[4];
-    double UTU_inv[6];
+    double UTU_inv[4];
     double v[3];
 
     double x, y, theta;
@@ -38,7 +36,8 @@ typedef struct {
 
 void module_init(MirrorSim2D_Params* in_param);
 void precal(double *h_meas);
-void cal_3dof(double *h_meas);
+void cal_3dof(double *h_meas, double *x, double *y, double *theta);
+void self_test();
 
 #ifdef __cplusplus
 }

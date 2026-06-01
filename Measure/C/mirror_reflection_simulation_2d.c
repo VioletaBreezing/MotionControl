@@ -250,7 +250,7 @@ static inline void cal_3dof_grad(const lie_scalar_t* h, MirrorSim2D_Params* para
 #endif
     
     // 迭代优化（只迭代1次，与MATLAB代码一致）
-    for (int iter = 0; iter < 3; iter++) {
+    for (int iter = 0; iter < 1; iter++) {
         // 第2步：update_params
 #ifdef _WIN32
         QueryPerformanceCounter(&start);

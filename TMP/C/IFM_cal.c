@@ -31,7 +31,7 @@ timer_t freq;
 #define my_fabs fabs
 #define my_sqrt sqrt
 #define my_solver   linalg_solve_Axb_3x3
-#elif defined(SOC_6678)
+#elif defined(SOC_C6678)
 #include "BSP_int.h"
 #include "BSP_timer.h"
 typedef double timer_t;

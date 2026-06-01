@@ -8,7 +8,7 @@ psi = [1e-4; 1e-5; -1e-5];
 phi = [-2e-4; 2e-5; -2e-5];
 
 % --- 轨迹设置 ---
-fs = 1 / 2e-4;          % 5000 Hz
+fs = 1 / 2e-2;          % 5000 Hz
 dt = 1/fs;
 t = 0:dt:10;            % 10 seconds
 N = length(t);
@@ -45,7 +45,7 @@ for k = 1:N
     [h_true, ~] = sensor_model(x_true(k), y_true(k), theta_true(k), a, b, psi, phi);
     
     % Add realistic sensor noise
-    h_meas = h_true;% + noise_rms * randn(3, 1);
+    h_meas = h_true + noise_rms * randn(3, 1);
     
     % Initial guess: use previous estimate
     if k == 1
@@ -61,7 +61,7 @@ for k = 1:N
     % --- 2-step Newton-Raphson ---
     x_cur = x0; y_cur = y0; theta_cur = theta0;
     tic;
-    for iter = 1:1
+    for iter = 1:2
         [h_est, J] = sensor_model(x_cur, y_cur, theta_cur, a, b, psi, phi);
         r = h_meas - h_est;
         delta = J \ r;

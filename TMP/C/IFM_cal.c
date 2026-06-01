@@ -283,6 +283,18 @@ int self_test(void) {
     } else {
         printf("\n⚠️  Check model or noise assumptions.\n");
     }
+
+    /* Free menmory */
+    free(x_true);
+    free(y_true);
+    free(theta_true);
+
+    free(x_est);
+    free(y_est);
+    free(theta_est);
+    free(err_x);
+    free(err_y);
+    free(err_theta);
 }
 
 static double randn() {

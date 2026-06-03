@@ -9,7 +9,7 @@ Ts = 1e-4;                       % 采样周期（秒）
 t = 0:Ts:10;                      % 时间向量（10秒）
 u = idinput(length(t), 'prbs', [], [0 1]);  % PRBS 输入信号
 y_true = lsim(G_true, u, t);      % 理想输出
-y = y_true;% + 0.02*randn(size(y_true));  % 添加小噪声
+y = y_true + 1e-6*randn(size(y_true));  % 添加小噪声
 
 % 创建 iddata 对象（系统辨识所需格式）
 data = iddata(y, u, Ts);

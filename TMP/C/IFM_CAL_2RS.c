@@ -53,6 +53,7 @@ typedef double timer_t;
 #pragma CODE_SECTION(sensor_model, ".sa_code")
 #pragma CODE_SECTION(linalg_solve_Axb_3x3, ".sa_code")
 #pragma CODE_SECTION(det3, ".sa_code")
+#pragma CODE_SECTION(model_run_interface, ".sa_code")
 #endif
 
 static double PI = 3.14159265358979323846;
@@ -63,18 +64,68 @@ typedef struct {
     double a_x[3];      // a的x坐标
     double a_y[3];      // a的y坐标
     double b[3];        // b参数
+    double lambda;      // 尺度缩放因子
+    int max_iteration;
 } IFM_param_t;
 
 typedef struct {
     double x, y, rz;
 } IFM_state_t;
 
+static IFM_state_t pos_internal;
+static IFM_param_t param_internal;
+
 static double randn();
 static double my_rms_func(double* arr, int N);
 static void linalg_solve_Axb_3x3(double* A, double* b, double* x);
 static inline double custom_sin(double x);
 static inline double custom_cos(double x);
-void sensor_model(IFM_state_t *pos, double *h, double *J, IFM_param_t *param)
+static void sensor_model(IFM_state_t *pos, double *h, double *J, IFM_param_t *param);
+
+int model_init_interface(double* phi, double* psi, 
+                        double *a_x, double *a_y, double *b, 
+                        double lambda,
+                        int len, int max_iter)
+{
+    if (len != 3) return -1;
+
+    int i = 0;
+    for (i = 0; i < 3; i++) {
+        param_internal.phi[i] = phi[i];
+        param_internal.psi[i] = psi[i];
+        param_internal.a_x[i] = a_x[i];
+        param_internal.a_y[i] = a_y[i];
+        param_internal.b[i] = b[i];
+    }
+    param_internal.lambda = lambda;
+    param_internal.max_iteration = max_iter;
+    return 0;
+}
+
+int model_run_interface(double *h_meas, double *pos_est, int len)
+{
+    if (len != 3) return -1;
+
+    int iter = 0;
+    double h_est[3], J[9], r[3], delta[3];
+    for (iter = 0; iter < param_internal.max_iteration; iter++)
+    {
+        sensor_model(&pos_internal, h_est, J, &param_internal);
+        r[0] = h_meas[0] - h_est[0];
+        r[1] = h_meas[1] - h_est[1];
+        r[2] = h_meas[2] - h_est[2];
+        my_solver(J, r, delta);
+        pos_internal.x += delta[0];
+        pos_internal.y += delta[1];
+        pos_internal.rz += delta[2];
+    }
+    pos_est[0] = pos_internal.x;
+    pos_est[1] = pos_internal.y;
+    pos_est[2] = pos_internal.rz;
+    return 0;
+}
+
+static void sensor_model(IFM_state_t *pos, double *h, double *J, IFM_param_t *param)
 {
     int i = 0;
     memset(h, 0, sizeof(double) * 3);
@@ -101,7 +152,7 @@ void sensor_model(IFM_state_t *pos, double *h, double *J, IFM_param_t *param)
         double dy = pos->y - param->a_y[i];
 
         double g = param->b[i] + dx * sin_zeta - dy * cos_zeta;
-        h[i] = f * g;
+        h[i] = f * g * param->lambda;
 
         /* --- Jacobian --- */
         double df_drz = -sin_gamma * (cos_2gamma + 2) / (cos_2gamma * cos_2gamma);
@@ -112,7 +163,9 @@ void sensor_model(IFM_state_t *pos, double *h, double *J, IFM_param_t *param)
         double dh_dy = f * dg_dy;
         double dh_drz = df_drz * g + f * dg_drz;
 
-        J[i*3] = dh_dx; J[i*3+1] = dh_dy; J[i*3+2] = dh_drz;
+        J[i*3] = dh_dx * param->lambda; 
+        J[i*3+1] = dh_dy * param->lambda; 
+        J[i*3+2] = dh_drz * param->lambda;
     }
 
     for (i = 1; i < 3; i++) {
@@ -128,7 +181,7 @@ void sensor_model(IFM_state_t *pos, double *h, double *J, IFM_param_t *param)
         double dy = pos->y - param->a_y[i];
 
         double g = param->b[i] + dx * sin_zeta - dy * cos_zeta;
-        h[i] = f * g;
+        h[i] = f * g * param->lambda;
 
         /* --- Jacobian --- */
         double df_drz = -sin_gamma * (cos_2gamma + 2) / (cos_2gamma * cos_2gamma);
@@ -139,7 +192,9 @@ void sensor_model(IFM_state_t *pos, double *h, double *J, IFM_param_t *param)
         double dh_dy = f * dg_dy;
         double dh_drz = df_drz * g + f * dg_drz;
 
-        J[i*3] = dh_dx; J[i*3+1] = dh_dy; J[i*3+2] = dh_drz;
+        J[i*3] = dh_dx * param->lambda; 
+        J[i*3+1] = dh_dy * param->lambda; 
+        J[i*3+2] = dh_drz * param->lambda;
     }
 }
 
@@ -155,6 +210,8 @@ int self_test(void) {
 
     param.psi[0] = 1e-4; param.psi[1] = 1e-5; param.psi[2] = -1e-5;
     param.phi[0] = -2e-4; param.phi[1] = 2e-5; param.phi[2] = -2e-5;
+
+    param.lambda = 1.0;
 
     /* --- 性能评估 --- */
 #ifdef _WIN32
